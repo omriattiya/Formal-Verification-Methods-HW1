@@ -65,7 +65,7 @@ public class FvmFacadeImpl implements FvmFacade {
         }
         return true;
     }
-    
+
 
     @Override
     public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
