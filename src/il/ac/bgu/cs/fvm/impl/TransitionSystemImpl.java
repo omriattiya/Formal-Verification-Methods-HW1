@@ -53,11 +53,18 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
                 else throw new StateNotFoundException(aState);
     }
 
+
+    public void addStates(Set<STATE> states) {
+        for (STATE state : states)
+            addState(state);
+    }
+
     @Override
     public void addState(STATE state) {
         states.add(state);
         labelsMap.put(state, new HashSet<>());
     }
+
 
     @Override
     public void addTransition(Transition<STATE, ACTION> t) throws FVMException {

@@ -27,7 +27,7 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S, A, P> TransitionSystem<S, A, P> createTransitionSystem() {
-        return new TransitionSystemImpl<S, A, P>();
+        return new TransitionSystemImpl<>();
     }
 
     @Override
@@ -73,15 +73,17 @@ public class FvmFacadeImpl implements FvmFacade {
     }
 
 
-    private <S,A,P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next){
-        S stateFrom; A action; S stateTo;
+    private <S, A, P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next) {
+        S stateFrom;
+        A action;
+        S stateTo;
 
-        while(next.tail() != null){
+        while (next.tail() != null) {
             stateFrom = next.head();
             action = next.tail().head();
             stateTo = next.tail().tail().head();
 
-            if(!ts.getTransitions().contains(new Transition<S,A>(stateFrom,action,stateTo))){ //TODO: not sure if contains will perform deep compare
+            if (!ts.getTransitions().contains(new Transition<>(stateFrom, action, stateTo))) { //TODO: not sure if contains will perform deep compare
                 return null;
             }
             next = next.tail().tail();
@@ -94,13 +96,13 @@ public class FvmFacadeImpl implements FvmFacade {
     public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
         AlternatingSequence<S, A> next;
 
-        if(!ts.getInitialStates().contains(e.head())){
+        if (!ts.getInitialStates().contains(e.head())) {
             return false;
         }
 
-        next = compareASandTS(ts,e);
+        next = compareASandTS(ts, e);
 
-        if(next == null){
+        if (next == null) {
             return false;
         }
         return post(ts, next.head()).size() == 0;
@@ -110,7 +112,7 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <S, A, P> boolean isExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
         AlternatingSequence<S, A> next;
-        next = compareASandTS(ts,e);
+        next = compareASandTS(ts, e);
         return next != null;
     }
 
@@ -118,11 +120,11 @@ public class FvmFacadeImpl implements FvmFacade {
     public <S, A, P> boolean isInitialExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
         AlternatingSequence<S, A> next;
 
-        if(!ts.getInitialStates().contains(e.head())){
+        if (!ts.getInitialStates().contains(e.head())) {
             return false;
         }
 
-        next = compareASandTS(ts,e);
+        next = compareASandTS(ts, e);
         return next != null;
     }
 
@@ -130,9 +132,9 @@ public class FvmFacadeImpl implements FvmFacade {
     public <S, A, P> boolean isMaximalExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
         AlternatingSequence<S, A> next;
 
-        next = compareASandTS(ts,e);
+        next = compareASandTS(ts, e);
 
-        if(next == null){
+        if (next == null) {
             return false;
         }
         return post(ts, next.head()).size() == 0;
@@ -222,26 +224,22 @@ public class FvmFacadeImpl implements FvmFacade {
         return pre_states;
     }
 
-
-
-
-
     @Override
     public <S, A> Set<S> reach(TransitionSystem<S, A, ?> ts) {
         Set<S> reachableStates = new HashSet<>();
         Set<S> currentlyDiscovering = new HashSet<>();
         Stack<S> workStack = new Stack<>();
 
-        for(S state: ts.getInitialStates()){
+        for (S state : ts.getInitialStates()) {
             workStack.push(state);
             currentlyDiscovering.add(state);
-            while(!workStack.empty()){
+            while (!workStack.empty()) {
                 S currState = workStack.pop();
                 reachableStates.add(currState);
                 currentlyDiscovering.remove(currState);
-                Set<S> nextStates = post(ts,currState);
-                for(S nextState: nextStates){
-                    if(currentlyDiscovering.contains(nextState)){
+                Set<S> nextStates = post(ts, currState);
+                for (S nextState : nextStates) {
+                    if (currentlyDiscovering.contains(nextState)) {
                         continue;
                     }
                     workStack.push(nextState);
@@ -252,10 +250,79 @@ public class FvmFacadeImpl implements FvmFacade {
         return reachableStates;
     }
 
+    // returns a set of pairs that consists of S1xS2
+    private <S1, S2> Set<Pair<S1, S2>> s1_x_s2(Set<S1> s1, Set<S2> s2) {
+        Set<Pair<S1, S2>> new_set = new HashSet<>();
+        for (S1 s1_item : s1) {
+            for (S2 s2_item : s2) {
+                new_set.add(new Pair<>(s1_item, s2_item));
+            }
+        }
+        return new_set;
+    }
+
     @Override
     public <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement interleave
+
+        // new transition system (S1 x S2, act1 U act2, ->, I1 x I2, AP1 U AP2, L)
+        TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem = createTransitionSystem();
+
+        // init states
+        Set<Pair<S1, S2>> interleaveStates = s1_x_s2(ts1.getStates(), ts2.getStates());
+        for (Pair<S1, S2> s : interleaveStates)
+            interleaveTransitionSystem.addState(s);
+
+        // init actions
+        for (A action : ts1.getActions())
+            interleaveTransitionSystem.addAction(action);
+        for (A action : ts2.getActions())
+            interleaveTransitionSystem.addAction(action);
+
+        // init initials
+        Set<Pair<S1, S2>> interleaveInitialStates = s1_x_s2(ts1.getInitialStates(), ts2.getInitialStates());
+        for (Pair<S1, S2> s : interleaveInitialStates)
+            interleaveTransitionSystem.addState(s);
+
+        // init atomic proposition
+        for (P proposition : ts1.getAtomicPropositions())
+            interleaveTransitionSystem.addAtomicProposition(proposition);
+        for (P proposition : ts2.getAtomicPropositions())
+            interleaveTransitionSystem.addAtomicProposition(proposition);
+
+        // init labels
+        for (Pair<S1, S2> state : interleaveTransitionSystem.getStates()) {
+            for (P proposition : ts1.getLabelingFunction().get(state.first))
+                interleaveTransitionSystem.addToLabel(state, proposition);
+            for (P proposition : ts2.getLabelingFunction().get(state.second))
+                interleaveTransitionSystem.addToLabel(state, proposition);
+        }
+
+        // init transitions
+        //transition (s1,s2)->(s1',s2)
+        for (Transition<S1, A> transition : ts1.getTransitions()) {
+            for (S2 s2_state : ts2.getStates()) {
+                Pair<S1, S2> pairFrom = new Pair<>(transition.getFrom(), s2_state);
+                Pair<S1, S2> pairTo = new Pair<>(transition.getTo(), s2_state);
+                A action = transition.getAction();
+                interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
+            }
+        }
+        //transition (s1,s2)->(s1,s2')
+        for (Transition<S2, A> transition : ts2.getTransitions()) {
+            for (S1 s1_state : ts1.getStates()) {
+                Pair<S1, S2> pairFrom = new Pair<>(s1_state, transition.getFrom());
+                Pair<S1, S2> pairTo = new Pair<>(s1_state, transition.getTo());
+                A action = transition.getAction();
+                interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
+            }
+        }
+
+        // init name
+        interleaveTransitionSystem.setName(ts1.getName() + " || " + ts2.getName());
+
+        return interleaveTransitionSystem;
     }
+
 
     @Override
     public <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, Set<A> handShakingActions) {
