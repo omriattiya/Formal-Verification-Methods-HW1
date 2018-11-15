@@ -1,7 +1,9 @@
 package il.ac.bgu.cs.fvm.impl;
 
+import il.ac.bgu.cs.fvm.exceptions.DeletionOfAttachedStateException;
 import il.ac.bgu.cs.fvm.exceptions.FVMException;
 import il.ac.bgu.cs.fvm.exceptions.StateNotFoundException;
+import il.ac.bgu.cs.fvm.exceptions.TransitionSystemPart;
 import il.ac.bgu.cs.fvm.transitionsystem.Transition;
 import il.ac.bgu.cs.fvm.transitionsystem.TransitionSystem;
 
@@ -45,13 +47,14 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
 
     @Override
     public void setInitial(STATE aState, boolean isInitial) throws StateNotFoundException {
-        if (states.contains(aState))
+        if (states.contains(aState)) {
             if (isInitial)
                 if (!initials.contains(aState))
                     initials.add(aState);
                 else if (initials.contains(aState))
                     initials.remove(aState);
                 else throw new StateNotFoundException(aState);
+        } else throw new StateNotFoundException(aState);
     }
 
 
@@ -158,8 +161,10 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     public void removeState(STATE state) throws FVMException {
         if (!states.contains(state))
             throw new FVMException("state does not exist");
+        if (!initials.contains(state))
+            throw new DeletionOfAttachedStateException(state, TransitionSystemPart.INITIAL_STATES);
         for (Transition<STATE, ACTION> t : transitions) {
-            if(t.getFrom().equals(state) || t.getTo().equals(state))
+            if (t.getFrom().equals(state) || t.getTo().equals(state))
                 removeTransition(t);
         }
         labelsMap.remove(state);
