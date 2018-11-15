@@ -35,11 +35,11 @@ public class FvmFacadeImpl implements FvmFacade {
         if (ts.getInitialStates().size() > 1) return false;
         for (S s : ts.getStates()) {
             Set<A> actions = new HashSet<>();
-            for (Transition t : ts.getTransitions())
+            for (Transition<S, A> t : ts.getTransitions())
                 if (t.getFrom().equals(s)) {
                     if (actions.contains(t.getAction()))
                         return false;
-                    actions.add((A) t.getAction());
+                    actions.add(t.getAction());
                 }
         }
         return true;
@@ -50,18 +50,24 @@ public class FvmFacadeImpl implements FvmFacade {
         if (ts.getInitialStates().size() > 1) return false;
 
         for (S s : ts.getStates()) {
-            Set<S> toStates = new HashSet<>();
-            // after this 'for' we have all the to states of 's'
-            for (Transition t : ts.getTransitions())
-                if (t.getFrom().equals(s))
-                    toStates.add((S) t.getTo());
-            // init arrays
-            //S[] states = toStates.toArray(new S[toStates.size()]);
-            /*for (int i = 0; i < states.length - 1; i++) {
-                for (int j = i + 1; j < states.length; j++) {
+            List<S> toStates = new ArrayList<>();
 
+            // after this 'for' we have all the 'to states' of 's'
+            for (Transition<S, A> t : ts.getTransitions())
+                if (t.getFrom().equals(s))
+                    toStates.add(t.getTo());
+
+            // here we are matching each 'toState`s' AP with one another to see if there are 2 with the same ap
+            for (int i = 0; i < toStates.size() - 1; i++) {
+                Set<P> ap = ts.getLabel(toStates.get(i));
+                for (int j = i + 1; j < toStates.size(); j++) {
+                    Set<P> ap2 = ts.getLabel(toStates.get(j));
+                    for (P p : ap2) {
+                        if (ap.contains(p))
+                            return false;
+                    }
                 }
-            }*/
+            }
         }
         return true;
     }
@@ -134,47 +140,86 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S, A> boolean isStateTerminal(TransitionSystem<S, A, ?> ts, S s) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isStateTerminal
+        for (Transition<S, A> transition : ts.getTransitions())
+            if (transition.getFrom().equals(s) && !transition.getTo().equals(s))
+                return false;
+        return true;
     }
 
     @Override
     public <S> Set<S> post(TransitionSystem<S, ?, ?> ts, S s) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement post
+        Set<S> post_states = new HashSet<>();
+        for (Transition<S, ?> transition : ts.getTransitions()) {
+            if (transition.getFrom().equals(s))
+                post_states.add(transition.getTo());
+        }
+        return post_states;
     }
 
     @Override
     public <S> Set<S> post(TransitionSystem<S, ?, ?> ts, Set<S> c) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement post
+        Set<S> post_states = new HashSet<>();
+        for (S state : c) {
+            post_states.addAll(post(ts, state));
+        }
+        return post_states;
     }
 
     @Override
     public <S, A> Set<S> post(TransitionSystem<S, A, ?> ts, S s, A a) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement post
+        Set<S> post_states = new HashSet<>();
+        for (Transition<S, A> transition : ts.getTransitions()) {
+            if (transition.getFrom().equals(s) && transition.getAction().equals(a))
+                post_states.add(transition.getTo());
+        }
+        return post_states;
     }
 
     @Override
     public <S, A> Set<S> post(TransitionSystem<S, A, ?> ts, Set<S> c, A a) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement post
+        Set<S> post_states = new HashSet<>();
+        for (S state : c) {
+            post_states.addAll(post(ts, state, a));
+        }
+        return post_states;
     }
 
     @Override
     public <S> Set<S> pre(TransitionSystem<S, ?, ?> ts, S s) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement pre
+        Set<S> pre_states = new HashSet<>();
+        for (Transition<S, ?> transition : ts.getTransitions()) {
+            if (transition.getTo().equals(s))
+                pre_states.add(transition.getFrom());
+        }
+        return pre_states;
     }
 
     @Override
     public <S> Set<S> pre(TransitionSystem<S, ?, ?> ts, Set<S> c) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement pre
+        Set<S> pre_states = new HashSet<>();
+        for (S state : c) {
+            pre_states.addAll(pre(ts, state));
+        }
+        return pre_states;
     }
 
     @Override
     public <S, A> Set<S> pre(TransitionSystem<S, A, ?> ts, S s, A a) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement pre
+        Set<S> pre_states = new HashSet<>();
+        for (Transition<S, ?> transition : ts.getTransitions()) {
+            if (transition.getTo().equals(s) && transition.getAction().equals(a))
+                pre_states.add(transition.getFrom());
+        }
+        return pre_states;
     }
 
     @Override
     public <S, A> Set<S> pre(TransitionSystem<S, A, ?> ts, Set<S> c, A a) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement pre
+        Set<S> pre_states = new HashSet<>();
+        for (S state : c) {
+            pre_states.addAll(pre(ts, state, a));
+        }
+        return pre_states;
     }
 
 
@@ -261,6 +306,9 @@ public class FvmFacadeImpl implements FvmFacade {
     public ProgramGraph<String, String> programGraphFromNanoPromela(InputStream inputStream) throws Exception {
         throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement programGraphFromNanoPromela
     }
+
+    //****************** IMPLEMENT UNTIL HERE FOR HW1 ***************************************
+
 
     @Override
     public <S, A, P, Saut> VerificationResult<S> verifyAnOmegaRegularProperty(TransitionSystem<S, A, P> ts, Automaton<Saut, P> aut) {

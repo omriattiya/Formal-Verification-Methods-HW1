@@ -18,7 +18,7 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     private Set<ATOMIC_PROPOSITION> atomic_propositions;
     private Map<STATE, Set<ATOMIC_PROPOSITION>> labelsMap;
 
-    public TransitionSystemImpl() {
+    TransitionSystemImpl() {
         actions = new HashSet<>();
         initials = new HashSet<>();
         states = new HashSet<>();
@@ -56,7 +56,7 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     @Override
     public void addState(STATE state) {
         states.add(state);
-        labelsMap.put(state, new HashSet<ATOMIC_PROPOSITION>());
+        labelsMap.put(state, new HashSet<>());
     }
 
     @Override
@@ -125,7 +125,7 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     public void removeAction(ACTION action) throws FVMException {
         if (!actions.contains(action))
             throw new FVMException("action does not exist");
-        for (Transition t : transitions) {
+        for (Transition<STATE, ACTION> t : transitions) {
             if (t.getAction().equals(action))
                 removeTransition(t);
         }
@@ -150,7 +150,7 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     public void removeState(STATE state) throws FVMException {
         if (!states.contains(state))
             throw new FVMException("state does not exist");
-        for (Transition t : transitions) {
+        for (Transition<STATE, ACTION> t : transitions) {
             if(t.getFrom().equals(state) || t.getTo().equals(state))
                 removeTransition(t);
         }
