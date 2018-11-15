@@ -72,26 +72,6 @@ public class FvmFacadeImpl implements FvmFacade {
         return true;
     }
 
-
-    private <S, A, P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next) {
-        S stateFrom;
-        A action;
-        S stateTo;
-
-        while (next.tail() != null) {
-            stateFrom = next.head();
-            action = next.tail().head();
-            stateTo = next.tail().tail().head();
-
-            if (!ts.getTransitions().contains(new Transition<>(stateFrom, action, stateTo))) { //TODO: not sure if contains will perform deep compare
-                return null;
-            }
-            next = next.tail().tail();
-        }
-
-        return next;
-    }
-
     @Override
     public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
         AlternatingSequence<S, A> next;
@@ -250,116 +230,14 @@ public class FvmFacadeImpl implements FvmFacade {
         return reachableStates;
     }
 
-    private <S1, S2, A, P> void interleave_initTransitionFunction_handShakingActions(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> handShakingActions) {
-
-        //transition if action in handshake and (s1,s2)-a->(s1',s2) && (s1,s2)-a->(s1,s2')
-        for (A action : interleaveTransitionSystem.getActions())
-            if (handShakingActions.contains(action))
-                for (Transition<S1, A> transition1 : ts1.getTransitions())
-                    if (transition1.getAction().equals(action))
-                        for (Transition<S2, A> transition2 : ts2.getTransitions())
-                            if (transition2.getAction().equals(action)) {
-                                Pair<S1, S2> pairFrom = new Pair<>(transition1.getFrom(), transition2.getFrom());
-                                Pair<S1, S2> pairTo = new Pair<>(transition1.getTo(), transition2.getTo());
-                                interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
-                            }
-
-        //transition (s1,s2)->(s1',s2)
-        for (Transition<S1, A> transition : ts1.getTransitions()) {
-            if (!handShakingActions.contains(transition.getAction()))
-                for (S2 s2_state : ts2.getStates()) {
-                    Pair<S1, S2> pairFrom = new Pair<>(transition.getFrom(), s2_state);
-                    Pair<S1, S2> pairTo = new Pair<>(transition.getTo(), s2_state);
-                    A action = transition.getAction();
-                    interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
-                }
-        }
-        //transition (s1,s2)->(s1,s2')
-        for (Transition<S2, A> transition : ts2.getTransitions()) {
-            if (!handShakingActions.contains(transition.getAction()))
-                for (S1 s1_state : ts1.getStates()) {
-                    Pair<S1, S2> pairFrom = new Pair<>(s1_state, transition.getFrom());
-                    Pair<S1, S2> pairTo = new Pair<>(s1_state, transition.getTo());
-                    A action = transition.getAction();
-                    interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
-                }
-        }
-    }
-
-
-    private <S1, S2, A, P> void interleave_initLabels
-            (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem) {
-        for (Pair<S1, S2> state : interleaveTransitionSystem.getStates()) {
-            for (P proposition : ts1.getLabelingFunction().get(state.first))
-                interleaveTransitionSystem.addToLabel(state, proposition);
-            for (P proposition : ts2.getLabelingFunction().get(state.second))
-                interleaveTransitionSystem.addToLabel(state, proposition);
-        }
-    }
-
-    private <S1, S2, A, P> void interleave_initAtomicProposition
-            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<P> atomicPropositions) {
-        for (P proposition : atomicPropositions)
-            interleaveTransitionSystem.addAtomicProposition(proposition);
-    }
-
-    private <S1, S2, A, P> void interleave_initActions
-            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> actions) {
-        for (A action : actions)
-            interleaveTransitionSystem.addAction(action);
-    }
-
-    private <S1, S2, A, P> void interleave_initStates
-            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<S1> states, Set<S2> states2) {
-        Set<Pair<S1, S2>> interleaveStates = s1_x_s2(states, states2);
-        for (Pair<S1, S2> s : interleaveStates)
-            interleaveTransitionSystem.addState(s);
-    }
-
-    // returns a set of pairs that consists of S1xS2
-    private <S1, S2> Set<Pair<S1, S2>> s1_x_s2(Set<S1> s1, Set<S2> s2) {
-        Set<Pair<S1, S2>> new_set = new HashSet<>();
-        for (S1 s1_item : s1) {
-            for (S2 s2_item : s2) {
-                new_set.add(new Pair<>(s1_item, s2_item));
-            }
-        }
-        return new_set;
-    }
-
-    private <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave_all_init_except_transition_and_name
-            (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2) {
-        // new transition system (S1 x S2, act1 U act2, ->, I1 x I2, AP1 U AP2, L)
-        TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem = createTransitionSystem();
-
-        // init states
-        interleave_initStates(interleaveTransitionSystem, ts1.getStates(), ts2.getStates());
-
-        // init initials
-        interleave_initStates(interleaveTransitionSystem, ts1.getInitialStates(), ts2.getInitialStates());
-
-        // init actions
-        interleave_initActions(interleaveTransitionSystem, ts1.getActions());
-        interleave_initActions(interleaveTransitionSystem, ts2.getActions());
-
-        // init atomic proposition
-        interleave_initAtomicProposition(interleaveTransitionSystem, ts1.getAtomicPropositions());
-        interleave_initAtomicProposition(interleaveTransitionSystem, ts2.getAtomicPropositions());
-
-        // init labels
-        interleave_initLabels(ts1, ts2, interleaveTransitionSystem);
-        return interleaveTransitionSystem;
-    }
-
-
     @Override
-    public <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave
-            (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2) {
+    public <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2) {
 
         TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem = interleave_all_init_except_transition_and_name(ts1, ts2);
 
         // init transitions
-        interleave_initTransitionFunction_handShakingActions(ts1, ts2, interleaveTransitionSystem, new HashSet<>());
+        Set<A> emptyHandShakeActionsSet = new HashSet<>();
+        interleave_initTransitionFunction_handShakingActions(ts1, ts2, interleaveTransitionSystem, emptyHandShakeActionsSet);
 
         // init name
         interleaveTransitionSystem.setName(ts1.getName() + " ||| " + ts2.getName());
@@ -451,5 +329,137 @@ public class FvmFacadeImpl implements FvmFacade {
     public <L> Automaton<?, L> GNBA2NBA(MultiColorAutomaton<?, L> mulAut) {
         throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement GNBA2NBA
     }
+
+
+    /***
+     *      _    _      _                   ______                _   _
+     *     | |  | |    | |                 |  ____|              | | (_)
+     *     | |__| | ___| |_ __   ___ _ __  | |__ _   _ _ __   ___| |_ _  ___  _ __  ___
+     *     |  __  |/ _ \ | '_ \ / _ \ '__| |  __| | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+     *     | |  | |  __/ | |_) |  __/ |    | |  | |_| | | | | (__| |_| | (_) | | | \__ \
+     *     |_|  |_|\___|_| .__/ \___|_|    |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+     *                   | |
+     *                   |_|
+     */
+
+    private <S1, S2, A, P> void interleave_initTransitionFunction_handShakingActions(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> handShakingActions) {
+
+        //transition if action in handshake and (s1,s2)-a->(s1',s2) && (s1,s2)-a->(s1,s2')
+        for (A action : interleaveTransitionSystem.getActions())
+            if (handShakingActions.contains(action))
+                for (Transition<S1, A> transition1 : ts1.getTransitions())
+                    if (transition1.getAction().equals(action))
+                        for (Transition<S2, A> transition2 : ts2.getTransitions())
+                            if (transition2.getAction().equals(action)) {
+                                Pair<S1, S2> pairFrom = new Pair<>(transition1.getFrom(), transition2.getFrom());
+                                Pair<S1, S2> pairTo = new Pair<>(transition1.getTo(), transition2.getTo());
+                                interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
+                            }
+
+        //transition (s1,s2)->(s1',s2)
+        for (Transition<S1, A> transition : ts1.getTransitions()) {
+            if (!handShakingActions.contains(transition.getAction()))
+                for (S2 s2_state : ts2.getStates()) {
+                    Pair<S1, S2> pairFrom = new Pair<>(transition.getFrom(), s2_state);
+                    Pair<S1, S2> pairTo = new Pair<>(transition.getTo(), s2_state);
+                    A action = transition.getAction();
+                    interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
+                }
+        }
+        //transition (s1,s2)->(s1,s2')
+        for (Transition<S2, A> transition : ts2.getTransitions()) {
+            if (!handShakingActions.contains(transition.getAction()))
+                for (S1 s1_state : ts1.getStates()) {
+                    Pair<S1, S2> pairFrom = new Pair<>(s1_state, transition.getFrom());
+                    Pair<S1, S2> pairTo = new Pair<>(s1_state, transition.getTo());
+                    A action = transition.getAction();
+                    interleaveTransitionSystem.addTransition(new Transition<>(pairFrom, action, pairTo));
+                }
+        }
+    }
+
+    private <S1, S2, A, P> void interleave_initLabels
+            (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem) {
+        for (Pair<S1, S2> state : interleaveTransitionSystem.getStates()) {
+            for (P proposition : ts1.getLabelingFunction().get(state.first))
+                interleaveTransitionSystem.addToLabel(state, proposition);
+            for (P proposition : ts2.getLabelingFunction().get(state.second))
+                interleaveTransitionSystem.addToLabel(state, proposition);
+        }
+    }
+
+    private <S1, S2, A, P> void interleave_initAtomicProposition
+            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<P> atomicPropositions) {
+        for (P proposition : atomicPropositions)
+            interleaveTransitionSystem.addAtomicProposition(proposition);
+    }
+
+    private <S1, S2, A, P> void interleave_initActions
+            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> actions) {
+        for (A action : actions)
+            interleaveTransitionSystem.addAction(action);
+    }
+
+    private <S1, S2, A, P> void interleave_initStates
+            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<S1> states, Set<S2> states2) {
+        Set<Pair<S1, S2>> interleaveStates = s1_x_s2(states, states2);
+        for (Pair<S1, S2> s : interleaveStates)
+            interleaveTransitionSystem.addState(s);
+    }
+
+    // returns a set of pairs that consists of S1xS2
+    private <S1, S2> Set<Pair<S1, S2>> s1_x_s2(Set<S1> s1, Set<S2> s2) {
+        Set<Pair<S1, S2>> new_set = new HashSet<>();
+        for (S1 s1_item : s1) {
+            for (S2 s2_item : s2) {
+                new_set.add(new Pair<>(s1_item, s2_item));
+            }
+        }
+        return new_set;
+    }
+
+    private <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave_all_init_except_transition_and_name
+            (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2) {
+        // new transition system (S1 x S2, act1 U act2, ->, I1 x I2, AP1 U AP2, L)
+        TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem = createTransitionSystem();
+
+        // init states
+        interleave_initStates(interleaveTransitionSystem, ts1.getStates(), ts2.getStates());
+
+        // init initials
+        interleave_initStates(interleaveTransitionSystem, ts1.getInitialStates(), ts2.getInitialStates());
+
+        // init actions
+        interleave_initActions(interleaveTransitionSystem, ts1.getActions());
+        interleave_initActions(interleaveTransitionSystem, ts2.getActions());
+
+        // init atomic proposition
+        interleave_initAtomicProposition(interleaveTransitionSystem, ts1.getAtomicPropositions());
+        interleave_initAtomicProposition(interleaveTransitionSystem, ts2.getAtomicPropositions());
+
+        // init labels
+        interleave_initLabels(ts1, ts2, interleaveTransitionSystem);
+        return interleaveTransitionSystem;
+    }
+
+    private <S, A, P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next) {
+        S stateFrom;
+        A action;
+        S stateTo;
+
+        while (next.tail() != null) {
+            stateFrom = next.head();
+            action = next.tail().head();
+            stateTo = next.tail().tail().head();
+
+            if (!ts.getTransitions().contains(new Transition<>(stateFrom, action, stateTo))) { //TODO: not sure if contains will perform deep compare
+                return null;
+            }
+            next = next.tail().tail();
+        }
+
+        return next;
+    }
+
 
 }
