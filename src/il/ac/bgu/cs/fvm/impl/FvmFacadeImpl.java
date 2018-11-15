@@ -96,7 +96,7 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <S, A> boolean isStateTerminal(TransitionSystem<S, A, ?> ts, S s) {
         for (Transition<S, A> transition : ts.getTransitions())
-            if (transition.getFrom().equals(s) && !transition.getTo().equals(s))
+            if (transition.getFrom().equals(s))
                 return false;
         return true;
     }
