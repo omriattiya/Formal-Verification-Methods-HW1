@@ -50,41 +50,86 @@ public class FvmFacadeImpl implements FvmFacade {
         if (ts.getInitialStates().size() > 1) return false;
 
         for (S s : ts.getStates()) {
-            ArrayList<S> toStates = new HashSet<>();
+            Set<S> toStates = new HashSet<>();
             // after this 'for' we have all the to states of 's'
             for (Transition t : ts.getTransitions())
                 if (t.getFrom().equals(s))
                     toStates.add((S) t.getTo());
             // init arrays
-            S[] states = toStates.toArray(new S[toStates.size()]);
-            for (int i = 0; i < states.length - 1; i++) {
+            //S[] states = toStates.toArray(new S[toStates.size()]);
+            /*for (int i = 0; i < states.length - 1; i++) {
                 for (int j = i + 1; j < states.length; j++) {
 
                 }
-            }
+            }*/
         }
         return true;
     }
 
 
-    @Override
-    public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isExecution
+    private <S,A,P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next){
+        S stateFrom; A action; S stateTo;
+
+        while(next.tail() != null){
+            stateFrom = next.head();
+            action = next.tail().head();
+            stateTo = next.tail().tail().head();
+
+            if(!ts.getTransitions().contains(new Transition<S,A>(stateFrom,action,stateTo))){ //TODO: not sure if contains will perform deep compare
+                return null;
+            }
+            next = next.tail().tail();
+        }
+
+        return next;
     }
 
     @Override
+    public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
+        AlternatingSequence<S, A> next;
+
+        if(!ts.getInitialStates().contains(e.head())){
+            return false;
+        }
+
+        next = compareASandTS(ts,e);
+
+        if(next == null){
+            return false;
+        }
+        return post(ts, next.head()).size() == 0;
+    }
+
+
+    @Override
     public <S, A, P> boolean isExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isExecutionFragment
+        AlternatingSequence<S, A> next;
+        next = compareASandTS(ts,e);
+        return next != null;
     }
 
     @Override
     public <S, A, P> boolean isInitialExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isInitialExecutionFragment
+        AlternatingSequence<S, A> next;
+
+        if(!ts.getInitialStates().contains(e.head())){
+            return false;
+        }
+
+        next = compareASandTS(ts,e);
+        return next != null;
     }
 
     @Override
     public <S, A, P> boolean isMaximalExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isMaximalExecutionFragment
+        AlternatingSequence<S, A> next;
+
+        next = compareASandTS(ts,e);
+
+        if(next == null){
+            return false;
+        }
+        return post(ts, next.head()).size() == 0;
     }
 
     @Override
@@ -132,9 +177,34 @@ public class FvmFacadeImpl implements FvmFacade {
         throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement pre
     }
 
+
+
+
+
     @Override
     public <S, A> Set<S> reach(TransitionSystem<S, A, ?> ts) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement reach
+        Set<S> reachableStates = new HashSet<>();
+        Set<S> currentlyDiscovering = new HashSet<>();
+        Stack<S> workStack = new Stack<>();
+
+        for(S state: ts.getInitialStates()){
+            workStack.push(state);
+            currentlyDiscovering.add(state);
+            while(!workStack.empty()){
+                S currState = workStack.pop();
+                reachableStates.add(currState);
+                currentlyDiscovering.remove(currState);
+                Set<S> nextStates = post(ts,currState);
+                for(S nextState: nextStates){
+                    if(currentlyDiscovering.contains(nextState)){
+                        continue;
+                    }
+                    workStack.push(nextState);
+                }
+            }
+        }
+
+        return reachableStates;
     }
 
     @Override
