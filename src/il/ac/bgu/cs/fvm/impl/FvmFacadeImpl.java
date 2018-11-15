@@ -35,11 +35,11 @@ public class FvmFacadeImpl implements FvmFacade {
         if (ts.getInitialStates().size() > 1) return false;
         for (S s : ts.getStates()) {
             Set<A> actions = new HashSet<>();
-            for (Transition t : ts.getTransitions())
+            for (Transition<S, A> t : ts.getTransitions())
                 if (t.getFrom().equals(s)) {
                     if (actions.contains(t.getAction()))
                         return false;
-                    actions.add((A) t.getAction());
+                    actions.add(t.getAction());
                 }
         }
         return true;
@@ -50,16 +50,22 @@ public class FvmFacadeImpl implements FvmFacade {
         if (ts.getInitialStates().size() > 1) return false;
 
         for (S s : ts.getStates()) {
-            ArrayList<S> toStates = new HashSet<>();
-            // after this 'for' we have all the to states of 's'
-            for (Transition t : ts.getTransitions())
-                if (t.getFrom().equals(s))
-                    toStates.add((S) t.getTo());
-            // init arrays
-            S[] states = toStates.toArray(new S[toStates.size()]);
-            for (int i = 0; i < states.length - 1; i++) {
-                for (int j = i + 1; j < states.length; j++) {
+            List<S> toStates = new ArrayList<>();
 
+            // after this 'for' we have all the 'to states' of 's'
+            for (Transition<S, A> t : ts.getTransitions())
+                if (t.getFrom().equals(s))
+                    toStates.add(t.getTo());
+
+            // here we are matching each 'toState`s' AP with one another to see if there are 2 with the same ap
+            for (int i = 0; i < toStates.size() - 1; i++) {
+                Set<P> ap = ts.getLabel(toStates.get(i));
+                for (int j = i + 1; j < toStates.size(); j++) {
+                    Set<P> ap2 = ts.getLabel(toStates.get(j));
+                    for (P p : ap2) {
+                        if (ap.contains(p))
+                            return false;
+                    }
                 }
             }
         }
