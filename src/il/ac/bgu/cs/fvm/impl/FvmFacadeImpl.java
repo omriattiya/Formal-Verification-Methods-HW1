@@ -73,24 +73,69 @@ public class FvmFacadeImpl implements FvmFacade {
     }
 
 
-    @Override
-    public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isExecution
+    private <S,A,P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next){
+        S stateFrom; A action; S stateTo;
+
+        while(next.tail() != null){
+            stateFrom = next.head();
+            action = next.tail().head();
+            stateTo = next.tail().tail().head();
+
+            if(!ts.getTransitions().contains(new Transition<S,A>(stateFrom,action,stateTo))){ //TODO: not sure if contains will perform deep compare
+                return null;
+            }
+            next = next.tail().tail();
+        }
+
+        return next;
     }
 
     @Override
+    public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
+        AlternatingSequence<S, A> next;
+
+        if(!ts.getInitialStates().contains(e.head())){
+            return false;
+        }
+
+        next = compareASandTS(ts,e);
+
+        if(next == null){
+            return false;
+        }
+        return post(ts, next.head()).size() == 0;
+    }
+
+
+    @Override
     public <S, A, P> boolean isExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isExecutionFragment
+        AlternatingSequence<S, A> next;
+        next = compareASandTS(ts,e);
+        return next != null;
     }
 
     @Override
     public <S, A, P> boolean isInitialExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isInitialExecutionFragment
+        AlternatingSequence<S, A> next;
+
+        if(!ts.getInitialStates().contains(e.head())){
+            return false;
+        }
+
+        next = compareASandTS(ts,e);
+        return next != null;
     }
 
     @Override
     public <S, A, P> boolean isMaximalExecutionFragment(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isMaximalExecutionFragment
+        AlternatingSequence<S, A> next;
+
+        next = compareASandTS(ts,e);
+
+        if(next == null){
+            return false;
+        }
+        return post(ts, next.head()).size() == 0;
     }
 
     @Override
@@ -177,9 +222,34 @@ public class FvmFacadeImpl implements FvmFacade {
         return pre_states;
     }
 
+
+
+
+
     @Override
     public <S, A> Set<S> reach(TransitionSystem<S, A, ?> ts) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement reach
+        Set<S> reachableStates = new HashSet<>();
+        Set<S> currentlyDiscovering = new HashSet<>();
+        Stack<S> workStack = new Stack<>();
+
+        for(S state: ts.getInitialStates()){
+            workStack.push(state);
+            currentlyDiscovering.add(state);
+            while(!workStack.empty()){
+                S currState = workStack.pop();
+                reachableStates.add(currState);
+                currentlyDiscovering.remove(currState);
+                Set<S> nextStates = post(ts,currState);
+                for(S nextState: nextStates){
+                    if(currentlyDiscovering.contains(nextState)){
+                        continue;
+                    }
+                    workStack.push(nextState);
+                }
+            }
+        }
+
+        return reachableStates;
     }
 
     @Override
