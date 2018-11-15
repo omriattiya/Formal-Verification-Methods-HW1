@@ -1,2 +1,2 @@
-id-num-1 email-1 name-1
-id-num-2 email-2 name-2
+208429696 omriat@post.bgu.ac.il Omri Attiya
+318354875 beshahar@post.bgu.ac.il Shahar Ben Shitrit

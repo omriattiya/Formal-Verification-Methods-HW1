@@ -10,35 +10,62 @@ import il.ac.bgu.cs.fvm.programgraph.ActionDef;
 import il.ac.bgu.cs.fvm.programgraph.ConditionDef;
 import il.ac.bgu.cs.fvm.programgraph.ProgramGraph;
 import il.ac.bgu.cs.fvm.transitionsystem.AlternatingSequence;
+import il.ac.bgu.cs.fvm.transitionsystem.Transition;
 import il.ac.bgu.cs.fvm.transitionsystem.TransitionSystem;
 import il.ac.bgu.cs.fvm.util.Pair;
 import il.ac.bgu.cs.fvm.verification.VerificationResult;
+
 import java.io.InputStream;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Implement the methods in this class. You may add additional classes as you
- * want, as long as they live in the {@code impl} package, or one of its 
+ * want, as long as they live in the {@code impl} package, or one of its
  * sub-packages.
  */
 public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S, A, P> TransitionSystem<S, A, P> createTransitionSystem() {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement createTransitionSystem
+        return new TransitionSystemImpl<S, A, P>();
     }
 
     @Override
     public <S, A, P> boolean isActionDeterministic(TransitionSystem<S, A, P> ts) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isActionDeterministic
+        if (ts.getInitialStates().size() > 1) return false;
+        for (S s : ts.getStates()) {
+            Set<A> actions = new HashSet<>();
+            for (Transition t : ts.getTransitions())
+                if (t.getFrom().equals(s)) {
+                    if (actions.contains(t.getAction()))
+                        return false;
+                    actions.add((A) t.getAction());
+                }
+        }
+        return true;
     }
 
     @Override
     public <S, A, P> boolean isAPDeterministic(TransitionSystem<S, A, P> ts) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement isAPDeterministic
+        if (ts.getInitialStates().size() > 1) return false;
+
+        for (S s : ts.getStates()) {
+            ArrayList<S> toStates = new HashSet<>();
+            // after this 'for' we have all the to states of 's'
+            for (Transition t : ts.getTransitions())
+                if (t.getFrom().equals(s))
+                    toStates.add((S) t.getTo());
+            // init arrays
+            S[] states = toStates.toArray(new S[toStates.size()]);
+            for (int i = 0; i < states.length - 1; i++) {
+                for (int j = i + 1; j < states.length; j++) {
+
+                }
+            }
+        }
+        return true;
     }
+    
 
     @Override
     public <S, A, P> boolean isExecution(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> e) {
@@ -179,5 +206,5 @@ public class FvmFacadeImpl implements FvmFacade {
     public <L> Automaton<?, L> GNBA2NBA(MultiColorAutomaton<?, L> mulAut) {
         throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement GNBA2NBA
     }
-   
+
 }
