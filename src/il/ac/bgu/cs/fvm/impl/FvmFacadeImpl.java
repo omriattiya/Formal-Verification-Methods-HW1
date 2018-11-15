@@ -318,7 +318,7 @@ public class FvmFacadeImpl implements FvmFacade {
         }
 
         // init name
-        interleaveTransitionSystem.setName(ts1.getName() + " || " + ts2.getName());
+        interleaveTransitionSystem.setName(ts1.getName() + " ||| " + ts2.getName());
 
         return interleaveTransitionSystem;
     }

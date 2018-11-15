@@ -19,6 +19,7 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     private Map<STATE, Set<ATOMIC_PROPOSITION>> labelsMap;
 
     TransitionSystemImpl() {
+        name = "";
         actions = new HashSet<>();
         initials = new HashSet<>();
         states = new HashSet<>();
