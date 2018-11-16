@@ -1,9 +1,6 @@
 package il.ac.bgu.cs.fvm.impl;
 
-import il.ac.bgu.cs.fvm.exceptions.DeletionOfAttachedStateException;
-import il.ac.bgu.cs.fvm.exceptions.FVMException;
-import il.ac.bgu.cs.fvm.exceptions.StateNotFoundException;
-import il.ac.bgu.cs.fvm.exceptions.TransitionSystemPart;
+import il.ac.bgu.cs.fvm.exceptions.*;
 import il.ac.bgu.cs.fvm.transitionsystem.Transition;
 import il.ac.bgu.cs.fvm.transitionsystem.TransitionSystem;
 
@@ -48,19 +45,14 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     @Override
     public void setInitial(STATE aState, boolean isInitial) throws StateNotFoundException {
         if (states.contains(aState)) {
-            if (isInitial)
+            if (isInitial) {
                 if (!initials.contains(aState))
                     initials.add(aState);
-                else if (initials.contains(aState))
-                    initials.remove(aState);
-                else throw new StateNotFoundException(aState);
+            } else if (initials.contains(aState))
+                initials.remove(aState);
+            else
+                throw new StateNotFoundException(aState);
         } else throw new StateNotFoundException(aState);
-    }
-
-
-    public void addStates(Set<STATE> states) {
-        for (STATE state : states)
-            addState(state);
     }
 
     @Override
@@ -69,15 +61,10 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
         labelsMap.put(state, new HashSet<>());
     }
 
-
     @Override
     public void addTransition(Transition<STATE, ACTION> t) throws FVMException {
-        if (!states.contains(t.getFrom()))
-            throw new FVMException("Transition from state doesnt exist");
-        if (!states.contains(t.getTo()))
-            throw new FVMException("Transition to state doesnt exist");
-        if (!actions.contains(t.getAction()))
-            throw new FVMException("Transition action doesnt exist");
+        if (!states.contains(t.getFrom()) || !states.contains(t.getTo()) || !actions.contains(t.getAction()))
+            throw new InvalidTransitionException(t);
         transitions.add(t);
     }
 
@@ -99,17 +86,17 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     @Override
     public void addToLabel(STATE s, ATOMIC_PROPOSITION l) throws FVMException {
         if (!states.contains(s))
-            throw new FVMException("state does not exist");
+            throw new StateNotFoundException(s);
         if (!atomic_propositions.contains(l))
-            throw new FVMException("tag does not exist");
+            throw new InvalidLablingPairException(s, l);
         labelsMap.get(s).add(l);
     }
 
     @Override
     public Set<ATOMIC_PROPOSITION> getLabel(STATE s) {
-        if (labelsMap.containsKey(s))
-            return labelsMap.get(s);
-        else return new HashSet<>();
+        if (!states.contains(s))
+            throw new StateNotFoundException(s);
+        return labelsMap.get(s);
     }
 
     @Override
@@ -135,46 +122,54 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     @Override
     public void removeAction(ACTION action) throws FVMException {
         if (!actions.contains(action))
-            throw new FVMException("action does not exist");
+            throw new DeletionOfAttachedActionException(action, TransitionSystemPart.ACTIONS);
         for (Transition<STATE, ACTION> t : transitions) {
             if (t.getAction().equals(action))
-                removeTransition(t);
+                throw new DeletionOfAttachedActionException(action, TransitionSystemPart.ACTIONS);
         }
         actions.remove(action);
     }
 
     @Override
     public void removeAtomicProposition(ATOMIC_PROPOSITION p) throws FVMException {
-        if (atomic_propositions.contains(p))
-            throw new FVMException("atomic proposition does not exist");
+        if (!atomic_propositions.contains(p))
+            throw new DeletionOfAttachedAtomicPropositionException(p, TransitionSystemPart.ATOMIC_PROPOSITIONS);
         for (STATE s : states)
-            removeLabel(s, p);
+            if (labelsMap.get(s).contains(p))
+                throw new DeletionOfAttachedAtomicPropositionException(p, TransitionSystemPart.LABELING_FUNCTION);
         atomic_propositions.remove(p);
     }
 
     @Override
     public void removeLabel(STATE s, ATOMIC_PROPOSITION l) {
+        if (!states.contains(s))
+            throw new StateNotFoundException(s);
+        if (!atomic_propositions.contains(l))
+            throw new InvalidLablingPairException(s, l);
+        if (!labelsMap.get(s).contains(l))
+            throw new DeletionOfAttachedAtomicPropositionException(l, TransitionSystemPart.LABELING_FUNCTION);
         labelsMap.get(s).remove(l);
     }
 
     @Override
     public void removeState(STATE state) throws FVMException {
         if (!states.contains(state))
-            throw new FVMException("state does not exist");
-        if (!initials.contains(state))
+            throw new StateNotFoundException(state);
+        if (initials.contains(state))
             throw new DeletionOfAttachedStateException(state, TransitionSystemPart.INITIAL_STATES);
+        if (labelsMap.get(state).size() > 0)
+            throw new DeletionOfAttachedStateException(state, TransitionSystemPart.LABELING_FUNCTION);
         for (Transition<STATE, ACTION> t : transitions) {
             if (t.getFrom().equals(state) || t.getTo().equals(state))
-                removeTransition(t);
+                throw new DeletionOfAttachedStateException(state, TransitionSystemPart.TRANSITIONS);
         }
-        labelsMap.remove(state);
-        initials.remove(state);
         states.remove(state);
-
     }
 
     @Override
     public void removeTransition(Transition<STATE, ACTION> t) {
+        if (!states.contains(t.getFrom()) || !states.contains(t.getTo()) || !actions.contains(t.getAction()))
+            throw new InvalidTransitionException(t);
         transitions.remove(t);
     }
 }

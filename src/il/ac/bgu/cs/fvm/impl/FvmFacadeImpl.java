@@ -5,6 +5,7 @@ import il.ac.bgu.cs.fvm.automata.Automaton;
 import il.ac.bgu.cs.fvm.automata.MultiColorAutomaton;
 import il.ac.bgu.cs.fvm.channelsystem.ChannelSystem;
 import il.ac.bgu.cs.fvm.circuits.Circuit;
+import il.ac.bgu.cs.fvm.exceptions.StateNotFoundException;
 import il.ac.bgu.cs.fvm.ltl.LTL;
 import il.ac.bgu.cs.fvm.programgraph.ActionDef;
 import il.ac.bgu.cs.fvm.programgraph.ConditionDef;
@@ -66,6 +67,9 @@ public class FvmFacadeImpl implements FvmFacade {
                         if (ap.contains(p))
                             return false;
                     }
+                    //2 states with empty ap
+                    if (ap2.size() == 0 && ap.size() == 0)
+                        return false;
                 }
             }
         }
@@ -130,6 +134,8 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S> Set<S> post(TransitionSystem<S, ?, ?> ts, S s) {
+        if (!ts.getStates().contains(s))
+            throw new StateNotFoundException(s);
         Set<S> post_states = new HashSet<>();
         for (Transition<S, ?> transition : ts.getTransitions()) {
             if (transition.getFrom().equals(s))
@@ -168,6 +174,8 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S> Set<S> pre(TransitionSystem<S, ?, ?> ts, S s) {
+        if (!ts.getStates().contains(s))
+            throw new StateNotFoundException(s);
         Set<S> pre_states = new HashSet<>();
         for (Transition<S, ?> transition : ts.getTransitions()) {
             if (transition.getTo().equals(s))
