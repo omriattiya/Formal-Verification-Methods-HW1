@@ -283,8 +283,24 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public TransitionSystem<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>, Object> transitionSystemFromCircuit
             (Circuit c) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement transitionSystemFromCircuit
+        TransitionSystem<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>, Object> ts = createTransitionSystem();
+
+        //states init
+        circuit_states_init(c, ts);
+
+        // init initials
+
+        // init actions
+
+        // init atomic proposition
+
+        // init labels
+
+        // init name
+
+
     }
+
 
     @Override
     public <L, A> TransitionSystem<Pair<L, Map<String, Object>>, A, String> transitionSystemFromProgramGraph
@@ -349,6 +365,40 @@ public class FvmFacadeImpl implements FvmFacade {
      *                   | |
      *                   |_|
      */
+
+    private void circuit_states_init(Circuit c, TransitionSystem<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
+        // init regs
+        Set<Map<String, Boolean>> reg = new HashSet<>();
+        String[] regs = new String[c.getRegisterNames().size()];
+        regs = c.getRegisterNames().toArray(regs);
+        circuit_create_map_states(reg, regs);
+
+        // init ins
+        Set<Map<String, Boolean>> in = new HashSet<>();
+        String[] inputs = new String[c.getInputPortNames().size()];
+        inputs = c.getInputPortNames().toArray(inputs);
+        circuit_create_map_states(in, inputs);
+
+        Set<Pair<Map<String, Boolean>, Map<String, Boolean>>> combined = s1_x_s2(reg, in);
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> p : combined)
+            ts.addState(p);
+    }
+
+    private void circuit_create_map_states(Set<Map<String, Boolean>> set, String[] names) {
+        int size = 2 ^ names.length;
+
+        for (int i = 0; i < size; i++) {
+            Map<String, Boolean> map_i = new HashMap<>();
+            StringBuilder binStr = new StringBuilder(Integer.toBinaryString(i));
+            int zero_to_add = names.length - binStr.length();
+            for (int j = 0; j < zero_to_add; j++)
+                binStr.insert(0, "0");
+            for (int j = 0; j < names.length; j++) {
+                map_i.put(names[j], binStr.charAt(j) == '0' ? Boolean.FALSE : Boolean.TRUE);
+            }
+            set.add(map_i);
+        }
+    }
 
     private <S1, S2, A, P> void interleave_initTransitionFunction_handShakingActions(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> handShakingActions) {
 
