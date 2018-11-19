@@ -17,8 +17,8 @@ public class ProgramGraphImpl<L, A> implements ProgramGraph<L, A> {
     private Set<PGTransition<L, A>> transitions;
     private Set<List<String>> initializations;
 
-    public ProgramGraphImpl(String name) {
-        this.name = name;
+
+    public ProgramGraphImpl() {
         locations = new HashSet<>();
         actions = new HashSet<>();
         initials = new HashSet<>();

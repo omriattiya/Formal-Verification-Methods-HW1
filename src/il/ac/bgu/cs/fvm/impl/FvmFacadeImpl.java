@@ -5,6 +5,7 @@ import il.ac.bgu.cs.fvm.automata.Automaton;
 import il.ac.bgu.cs.fvm.automata.MultiColorAutomaton;
 import il.ac.bgu.cs.fvm.channelsystem.ChannelSystem;
 import il.ac.bgu.cs.fvm.circuits.Circuit;
+import il.ac.bgu.cs.fvm.exceptions.ActionNotFoundException;
 import il.ac.bgu.cs.fvm.exceptions.StateNotFoundException;
 import il.ac.bgu.cs.fvm.ltl.LTL;
 import il.ac.bgu.cs.fvm.programgraph.ActionDef;
@@ -126,6 +127,9 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S, A> boolean isStateTerminal(TransitionSystem<S, A, ?> ts, S s) {
+        if (!ts.getStates().contains(s)) {
+            throw new StateNotFoundException(s);
+        }
         for (Transition<S, A> transition : ts.getTransitions())
             if (transition.getFrom().equals(s))
                 return false;
@@ -271,7 +275,7 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <L, A> ProgramGraph<L, A> createProgramGraph() {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement createProgramGraph
+        return new ProgramGraphImpl<>();
     }
 
     @Override
@@ -289,7 +293,7 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <L, A> TransitionSystem<Pair<L, Map<String, Object>>, A, String> transitionSystemFromProgramGraph
             (ProgramGraph<L, A> pg, Set<ActionDef> actionDefs, Set<ConditionDef> conditionDefs) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement transitionSystemFromProgramGraph
+        return null; //TODO: Shahar
     }
 
     @Override
@@ -455,10 +459,25 @@ public class FvmFacadeImpl implements FvmFacade {
         A action;
         S stateTo;
 
-        while (next.tail() != null) {
+        if (next.tail().isEmpty()) {
+            if (ts.getStates().contains(next.head())) {
+                return next;
+            }
+        }
+        AlternatingSequence<A, S> tail = next.tail();
+        while (!next.tail().isEmpty()) {
             stateFrom = next.head();
             action = next.tail().head();
             stateTo = next.tail().tail().head();
+            if (!ts.getStates().contains(stateFrom)) {
+                throw new StateNotFoundException(stateFrom);
+            }
+            else if (!ts.getStates().contains(stateTo)) {
+                throw new StateNotFoundException(stateTo);
+            }
+            else if(!ts.getActions().contains(action)){
+                throw new ActionNotFoundException(action);
+            }
 
             if (!ts.getTransitions().contains(new Transition<>(stateFrom, action, stateTo))) { //TODO: not sure if contains will perform deep compare
                 return null;
