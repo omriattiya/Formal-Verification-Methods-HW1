@@ -44,16 +44,15 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
 
     @Override
     public void setInitial(STATE aState, boolean isInitial) throws StateNotFoundException {
-        if (states.contains(aState))
-        {
-            if (isInitial)
-                initials.add(aState);
-            else
+        if (states.contains(aState)) {
+            if (isInitial) {
+                if (!initials.contains(aState))
+                    initials.add(aState);
+            } else if (initials.contains(aState))
                 initials.remove(aState);
-        }
-        else{
-            throw new StateNotFoundException(aState);
-        }
+            else
+                throw new StateNotFoundException(aState);
+        } else throw new StateNotFoundException(aState);
     }
 
     @Override
@@ -123,10 +122,10 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
     @Override
     public void removeAction(ACTION action) throws FVMException {
         if (!actions.contains(action))
-            throw new FVMException("action does not exist");
+            throw new DeletionOfAttachedActionException(action, TransitionSystemPart.ACTIONS);
         for (Transition<STATE, ACTION> t : transitions) {
             if (t.getAction().equals(action))
-                removeTransition(t);
+                throw new DeletionOfAttachedActionException(action, TransitionSystemPart.ACTIONS);
         }
         actions.remove(action);
     }
@@ -161,13 +160,10 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
         if (labelsMap.get(state).size() > 0)
             throw new DeletionOfAttachedStateException(state, TransitionSystemPart.LABELING_FUNCTION);
         for (Transition<STATE, ACTION> t : transitions) {
-            if(t.getFrom().equals(state) || t.getTo().equals(state))
-                removeTransition(t);
+            if (t.getFrom().equals(state) || t.getTo().equals(state))
+                throw new DeletionOfAttachedStateException(state, TransitionSystemPart.TRANSITIONS);
         }
-        labelsMap.remove(state);
-        initials.remove(state);
         states.remove(state);
-
     }
 
     @Override
