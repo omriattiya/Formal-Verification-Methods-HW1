@@ -231,7 +231,7 @@ public class FvmFacadeImpl implements FvmFacade {
                 currentlyDiscovering.remove(currState);
                 Set<S> nextStates = post(ts, currState);
                 for (S nextState : nextStates) {
-                    if (currentlyDiscovering.contains(nextState)) {
+                    if (currentlyDiscovering.contains(nextState) || reachableStates.contains(nextState)) {
                         continue;
                     }
                     workStack.push(nextState);
