@@ -336,17 +336,7 @@ public class FvmFacadeImpl implements FvmFacade {
         ts.setName("circuit to transition system");
 
         return ts;
-    }
-
-    private Pair<Map<String, Boolean>, Map<String, Boolean>> findStateCircuit(Circuit c, Pair<Map<String, Boolean>,
-            Map<String, Boolean>> state, Map<String, Boolean> action, TransitionSystem<Pair<Map<String, Boolean>,
-            Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
-        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state_in_ts : ts.getStates()) {
-            if (c.updateRegisters(state.first, state.second).equals(state_in_ts.second) &&
-                    action.equals(state_in_ts.first))
-                return state_in_ts;
-        }
-        return null; //should not ever happen
+        //TODO : CHECK IT!!
     }
 
 
@@ -413,6 +403,17 @@ public class FvmFacadeImpl implements FvmFacade {
      *                   | |
      *                   |_|
      */
+
+    private Pair<Map<String, Boolean>, Map<String, Boolean>> findStateCircuit(Circuit c, Pair<Map<String, Boolean>,
+            Map<String, Boolean>> state, Map<String, Boolean> action, TransitionSystem<Pair<Map<String, Boolean>,
+            Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state_in_ts : ts.getStates()) {
+            if (c.updateRegisters(state.first, state.second).equals(state_in_ts.second) &&
+                    action.equals(state_in_ts.first))
+                return state_in_ts;
+        }
+        return null; //should not ever happen
+    }
 
     private void circuit_states_init(Circuit c, TransitionSystem<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
         // init regs
