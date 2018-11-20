@@ -289,16 +289,64 @@ public class FvmFacadeImpl implements FvmFacade {
         circuit_states_init(c, ts);
 
         // init initials
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state : ts.getStates()) {
+            if (!state.second.values().contains(Boolean.TRUE))
+                ts.setInitial(state, true);
+        }
 
         // init actions
+        //pay attention, maybe need a deep copy here
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state : ts.getStates()) {
+            ts.addAction((state.first));
+        }
 
         // init atomic proposition
+        for (String reg : c.getRegisterNames())
+            ts.addAtomicProposition(reg);
+        for (String in : c.getInputPortNames())
+            ts.addAtomicProposition(in);
+        for (String out : c.getOutputPortNames())
+            ts.addAtomicProposition(out);
+
 
         // init labels
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state : ts.getStates()) {
+            for (String reg : c.getRegisterNames())
+                if (state.second.get(reg))
+                    ts.addToLabel(state, reg);
+            for (String in : c.getInputPortNames())
+                if (state.first.get(in))
+                    ts.addToLabel(state, in);
+            for (String out : c.getOutputPortNames())
+                if (c.computeOutputs(state.first, state.second).get(out))
+                    ts.addToLabel(state, out);
+        }
+
+        // init transitions
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state : ts.getStates()) {
+            Transition<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>> transition;
+            for (Map<String, Boolean> action : ts.getActions()) {
+                Pair<Map<String, Boolean>, Map<String, Boolean>> toState = findStateCircuit(c, state, action, ts);
+                transition = new Transition<>(state, action, toState);
+                ts.addTransition(transition);
+            }
+        }
 
         // init name
+        ts.setName("circuit to transition system");
 
+        return ts;
+    }
 
+    private Pair<Map<String, Boolean>, Map<String, Boolean>> findStateCircuit(Circuit c, Pair<Map<String, Boolean>,
+            Map<String, Boolean>> state, Map<String, Boolean> action, TransitionSystem<Pair<Map<String, Boolean>,
+            Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
+        for (Pair<Map<String, Boolean>, Map<String, Boolean>> state_in_ts : ts.getStates()) {
+            if (c.updateRegisters(state.first, state.second).equals(state_in_ts.second) &&
+                    action.equals(state_in_ts.first))
+                return state_in_ts;
+        }
+        return null; //should not ever happen
     }
 
 
@@ -379,13 +427,13 @@ public class FvmFacadeImpl implements FvmFacade {
         inputs = c.getInputPortNames().toArray(inputs);
         circuit_create_map_states(in, inputs);
 
-        Set<Pair<Map<String, Boolean>, Map<String, Boolean>>> combined = s1_x_s2(reg, in);
+        Set<Pair<Map<String, Boolean>, Map<String, Boolean>>> combined = s1_x_s2(in, reg);
         for (Pair<Map<String, Boolean>, Map<String, Boolean>> p : combined)
             ts.addState(p);
     }
 
     private void circuit_create_map_states(Set<Map<String, Boolean>> set, String[] names) {
-        int size = 2 ^ names.length;
+        int size = (int) Math.pow(2, names.length);
 
         for (int i = 0; i < size; i++) {
             Map<String, Boolean> map_i = new HashMap<>();
