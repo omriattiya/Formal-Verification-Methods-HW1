@@ -5,10 +5,12 @@ import il.ac.bgu.cs.fvm.automata.Automaton;
 import il.ac.bgu.cs.fvm.automata.MultiColorAutomaton;
 import il.ac.bgu.cs.fvm.channelsystem.ChannelSystem;
 import il.ac.bgu.cs.fvm.circuits.Circuit;
+import il.ac.bgu.cs.fvm.exceptions.ActionNotFoundException;
 import il.ac.bgu.cs.fvm.exceptions.StateNotFoundException;
 import il.ac.bgu.cs.fvm.ltl.LTL;
 import il.ac.bgu.cs.fvm.programgraph.ActionDef;
 import il.ac.bgu.cs.fvm.programgraph.ConditionDef;
+import il.ac.bgu.cs.fvm.programgraph.PGTransition;
 import il.ac.bgu.cs.fvm.programgraph.ProgramGraph;
 import il.ac.bgu.cs.fvm.transitionsystem.AlternatingSequence;
 import il.ac.bgu.cs.fvm.transitionsystem.Transition;
@@ -126,6 +128,9 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <S, A> boolean isStateTerminal(TransitionSystem<S, A, ?> ts, S s) {
+        if (!ts.getStates().contains(s)) {
+            throw new StateNotFoundException(s);
+        }
         for (Transition<S, A> transition : ts.getTransitions())
             if (transition.getFrom().equals(s))
                 return false;
@@ -227,7 +232,7 @@ public class FvmFacadeImpl implements FvmFacade {
                 currentlyDiscovering.remove(currState);
                 Set<S> nextStates = post(ts, currState);
                 for (S nextState : nextStates) {
-                    if (currentlyDiscovering.contains(nextState)) {
+                    if (currentlyDiscovering.contains(nextState) || reachableStates.contains(nextState)) {
                         continue;
                     }
                     workStack.push(nextState);
@@ -271,7 +276,7 @@ public class FvmFacadeImpl implements FvmFacade {
 
     @Override
     public <L, A> ProgramGraph<L, A> createProgramGraph() {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement createProgramGraph
+        return new ProgramGraphImpl<>();
     }
 
     @Override
@@ -343,7 +348,74 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <L, A> TransitionSystem<Pair<L, Map<String, Object>>, A, String> transitionSystemFromProgramGraph
             (ProgramGraph<L, A> pg, Set<ActionDef> actionDefs, Set<ConditionDef> conditionDefs) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement transitionSystemFromProgramGraph
+        TransitionSystem<Pair<L, Map<String, Object>>, A, String> ts = new TransitionSystemImpl<>();
+        ts.setName(pg.getName() + "_as_transition_system");
+
+        Stack<Pair<L, Map<String, Object>>> to_work_on = new Stack<>();
+        Set<Transition<Pair<L, Map<String, Object>>, A>> transitions = new HashSet<>();
+
+        Map<String, Object> state_map = new HashMap<>();
+        for (List<String> initialization_list : pg.getInitalizations()) {
+            for (String init_string : initialization_list) {
+                for (ActionDef ad : actionDefs) {
+                    if (ad.isMatchingAction(init_string)) {
+                        state_map = ad.effect(state_map, init_string);
+                    }
+                }
+            }
+        }
+
+        for (L init_loc : pg.getInitialLocations()) {
+
+            to_work_on.push(new Pair<>(init_loc, state_map));
+
+            while (!to_work_on.empty()) {
+                Pair<L, Map<String, Object>> current_loc = to_work_on.pop();
+                for (PGTransition<L, A> pg_transition : pg.getTransitions()) {
+                    if (pg_transition.getFrom().equals(current_loc.first)) {
+                        if(ConditionDef.evaluate(conditionDefs,current_loc.second,pg_transition.getCondition())){
+                            Map<String, Object> new_state = current_loc.second;
+                            for (ActionDef ad : actionDefs) {
+                                if (ad.isMatchingAction(pg_transition.getAction())) {
+                                    new_state = ad.effect(current_loc.second, pg_transition.getAction());
+                                    break;
+                                }
+                            }
+                            transitions.add(new Transition<>(new Pair<>(current_loc.first, current_loc.second), pg_transition.getAction(), new Pair<>(pg_transition.getTo(), new_state)));
+                            if (!ts.getStates().contains(new Pair<>(pg_transition.getTo(), new_state))) {
+                                to_work_on.push(new Pair<>(pg_transition.getTo(), new_state));
+                            }
+                        }
+                    }
+                }
+                Pair<L, Map<String, Object>> state_to_add = new Pair<>(current_loc.first, current_loc.second);
+                ts.addStates(state_to_add);
+                ts.addAtomicPropositions(current_loc.first.toString());
+                ts.addToLabel(state_to_add, current_loc.first.toString());
+                for (String key : current_loc.second.keySet()) {
+                    ts.addAtomicPropositions(key + " = " + current_loc.second.get(key));
+                    ts.addToLabel(state_to_add, key + " = " + current_loc.second.get(key));
+                }
+            }
+        }
+
+        for (L init_loc : pg.getInitialLocations()) {
+            for (Pair<L, Map<String, Object>> state : ts.getStates()) {
+                if (state.first.equals(init_loc) && state.second.equals(state_map)) {
+                    ts.setInitial(state, true);
+                }
+            }
+        }
+
+        for (PGTransition<L, A> pg_transition : pg.getTransitions()) {
+            ts.addAction(pg_transition.getAction());
+        }
+
+        for(Transition<Pair<L,Map<String,Object>>,A> transition: transitions){
+            ts.addTransition(transition);
+        }
+
+        return ts;
     }
 
     @Override
@@ -554,10 +626,23 @@ public class FvmFacadeImpl implements FvmFacade {
         A action;
         S stateTo;
 
-        while (next.tail() != null) {
+        if (next.tail().isEmpty()) {
+            if (ts.getStates().contains(next.head())) {
+                return next;
+            }
+        }
+        AlternatingSequence<A, S> tail = next.tail();
+        while (!next.tail().isEmpty()) {
             stateFrom = next.head();
             action = next.tail().head();
             stateTo = next.tail().tail().head();
+            if (!ts.getStates().contains(stateFrom)) {
+                throw new StateNotFoundException(stateFrom);
+            } else if (!ts.getStates().contains(stateTo)) {
+                throw new StateNotFoundException(stateTo);
+            } else if (!ts.getActions().contains(action)) {
+                throw new ActionNotFoundException(action);
+            }
 
             if (!ts.getTransitions().contains(new Transition<>(stateFrom, action, stateTo))) { //TODO: not sure if contains will perform deep compare
                 return null;
