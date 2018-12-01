@@ -255,6 +255,8 @@ public class FvmFacadeImpl implements FvmFacade {
         // init name
         interleaveTransitionSystem.setName(ts1.getName() + " ||| " + ts2.getName());
 
+        remove_unreachable(interleaveTransitionSystem);
+
         return interleaveTransitionSystem;
     }
 
@@ -269,6 +271,8 @@ public class FvmFacadeImpl implements FvmFacade {
 
         // init name
         interleaveTransitionSystem.setName(ts1.getName() + " |||h " + ts2.getName());
+
+        remove_unreachable(interleaveTransitionSystem);
 
         return interleaveTransitionSystem;
     }
@@ -345,41 +349,6 @@ public class FvmFacadeImpl implements FvmFacade {
         return ts;
         //TODO : CHECK IT!!
     }
-
-    private <STATE, ACTION, ATOMIC_PROPOSITION> void remove_unreachable(TransitionSystem<STATE, ACTION, ATOMIC_PROPOSITION> ts) {
-
-        Set<STATE> reachable_set = reach(ts);
-        Set<STATE> unreachable_states = new HashSet<>();
-        Set<Pair<STATE, ATOMIC_PROPOSITION>> ap_remove = new HashSet<>();
-        Set<Transition<STATE, ACTION>> unreachable_transitions = new HashSet<>();
-
-        for (STATE state : ts.getStates()) {
-            if (!reachable_set.contains(state)) {
-                Set<Transition<STATE, ACTION>> all = ts.getTransitions();
-                for (Transition<STATE, ACTION> transition : all)
-                    if (transition.getFrom().equals(state) || transition.getTo().equals(state))
-                        unreachable_transitions.add(transition);
-                unreachable_states.add(state);
-
-                for (ATOMIC_PROPOSITION ap : ts.getLabelingFunction().get(state))
-                    ap_remove.add(new Pair<>(state, ap));
-            }
-        }
-
-
-        for (Transition<STATE, ACTION> transition : unreachable_transitions)
-            ts.removeTransition(transition);
-
-        for (Pair<STATE, ATOMIC_PROPOSITION> p : ap_remove)
-            ts.removeLabel(p.first, p.second);
-
-        for (STATE state : unreachable_states) {
-            ts.removeState(state);
-        }
-
-
-    }
-
 
     @Override
     public <L, A> TransitionSystem<Pair<L, Map<String, Object>>, A, String> transitionSystemFromProgramGraph
@@ -511,6 +480,36 @@ public class FvmFacadeImpl implements FvmFacade {
      *                   | |
      *                   |_|
      */
+
+    private <STATE, ACTION, ATOMIC_PROPOSITION> void remove_unreachable(TransitionSystem<STATE, ACTION, ATOMIC_PROPOSITION> ts) {
+        Set<STATE> reachable_set = reach(ts);
+        Set<STATE> unreachable_states = new HashSet<>();
+        Set<Pair<STATE, ATOMIC_PROPOSITION>> ap_remove = new HashSet<>();
+        Set<Transition<STATE, ACTION>> unreachable_transitions = new HashSet<>();
+
+        for (STATE state : ts.getStates()) {
+            if (!reachable_set.contains(state)) {
+                Set<Transition<STATE, ACTION>> all = ts.getTransitions();
+                for (Transition<STATE, ACTION> transition : all)
+                    if (transition.getFrom().equals(state) || transition.getTo().equals(state))
+                        unreachable_transitions.add(transition);
+                unreachable_states.add(state);
+
+                for (ATOMIC_PROPOSITION ap : ts.getLabelingFunction().get(state))
+                    ap_remove.add(new Pair<>(state, ap));
+            }
+        }
+
+        for (Transition<STATE, ACTION> transition : unreachable_transitions)
+            ts.removeTransition(transition);
+
+        for (Pair<STATE, ATOMIC_PROPOSITION> p : ap_remove)
+            ts.removeLabel(p.first, p.second);
+
+        for (STATE state : unreachable_states) {
+            ts.removeState(state);
+        }
+    }
 
     private Pair<Map<String, Boolean>, Map<String, Boolean>> findStateCircuit(Circuit
                                                                                       c, Pair<Map<String, Boolean>,
