@@ -340,8 +340,44 @@ public class FvmFacadeImpl implements FvmFacade {
         // init name
         ts.setName("circuit to transition system");
 
+        // remove unreachable
+        remove_unreachable(ts);
         return ts;
         //TODO : CHECK IT!!
+    }
+
+    private <STATE, ACTION, ATOMIC_PROPOSITION> void remove_unreachable(TransitionSystem<STATE, ACTION, ATOMIC_PROPOSITION> ts) {
+
+        Set<STATE> reachable_set = reach(ts);
+        Set<STATE> unreachable_states = new HashSet<>();
+        Set<Pair<STATE, ATOMIC_PROPOSITION>> ap_remove = new HashSet<>();
+        Set<Transition<STATE, ACTION>> unreachable_transitions = new HashSet<>();
+
+        for (STATE state : ts.getStates()) {
+            if (!reachable_set.contains(state)) {
+                Set<Transition<STATE, ACTION>> all = ts.getTransitions();
+                for (Transition<STATE, ACTION> transition : all)
+                    if (transition.getFrom().equals(state) || transition.getTo().equals(state))
+                        unreachable_transitions.add(transition);
+                unreachable_states.add(state);
+
+                for (ATOMIC_PROPOSITION ap : ts.getLabelingFunction().get(state))
+                    ap_remove.add(new Pair<>(state, ap));
+            }
+        }
+
+
+        for (Transition<STATE, ACTION> transition : unreachable_transitions)
+            ts.removeTransition(transition);
+
+        for (Pair<STATE, ATOMIC_PROPOSITION> p : ap_remove)
+            ts.removeLabel(p.first, p.second);
+
+        for (STATE state : unreachable_states) {
+            ts.removeState(state);
+        }
+
+
     }
 
 
@@ -373,7 +409,7 @@ public class FvmFacadeImpl implements FvmFacade {
                 Pair<L, Map<String, Object>> current_loc = to_work_on.pop();
                 for (PGTransition<L, A> pg_transition : pg.getTransitions()) {
                     if (pg_transition.getFrom().equals(current_loc.first)) {
-                        if(ConditionDef.evaluate(conditionDefs,current_loc.second,pg_transition.getCondition())){
+                        if (ConditionDef.evaluate(conditionDefs, current_loc.second, pg_transition.getCondition())) {
                             Map<String, Object> new_state = current_loc.second;
                             for (ActionDef ad : actionDefs) {
                                 if (ad.isMatchingAction(pg_transition.getAction())) {
@@ -411,7 +447,7 @@ public class FvmFacadeImpl implements FvmFacade {
             ts.addAction(pg_transition.getAction());
         }
 
-        for(Transition<Pair<L,Map<String,Object>>,A> transition: transitions){
+        for (Transition<Pair<L, Map<String, Object>>, A> transition : transitions) {
             ts.addTransition(transition);
         }
 
@@ -476,7 +512,8 @@ public class FvmFacadeImpl implements FvmFacade {
      *                   |_|
      */
 
-    private Pair<Map<String, Boolean>, Map<String, Boolean>> findStateCircuit(Circuit c, Pair<Map<String, Boolean>,
+    private Pair<Map<String, Boolean>, Map<String, Boolean>> findStateCircuit(Circuit
+                                                                                      c, Pair<Map<String, Boolean>,
             Map<String, Boolean>> state, Map<String, Boolean> action, TransitionSystem<Pair<Map<String, Boolean>,
             Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
         for (Pair<Map<String, Boolean>, Map<String, Boolean>> state_in_ts : ts.getStates()) {
@@ -487,7 +524,8 @@ public class FvmFacadeImpl implements FvmFacade {
         return null; //should not ever happen
     }
 
-    private void circuit_states_init(Circuit c, TransitionSystem<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
+    private void circuit_states_init(Circuit
+                                             c, TransitionSystem<Pair<Map<String, Boolean>, Map<String, Boolean>>, Map<String, Boolean>, Object> ts) {
         // init regs
         Set<Map<String, Boolean>> reg = new HashSet<>();
         String[] regs = new String[c.getRegisterNames().size()];
@@ -521,7 +559,8 @@ public class FvmFacadeImpl implements FvmFacade {
         }
     }
 
-    private <S1, S2, A, P> void interleave_initTransitionFunction_handShakingActions(TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> handShakingActions) {
+    private <S1, S2, A, P> void interleave_initTransitionFunction_handShakingActions
+            (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<A> handShakingActions) {
 
         //transition if action in handshake and (s1,s2)-a->(s1',s2) && (s1,s2)-a->(s1,s2')
         for (A action : interleaveTransitionSystem.getActions())
@@ -621,7 +660,8 @@ public class FvmFacadeImpl implements FvmFacade {
         return interleaveTransitionSystem;
     }
 
-    private <S, A, P> AlternatingSequence<S, A> compareASandTS(TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next) {
+    private <S, A, P> AlternatingSequence<S, A> compareASandTS
+            (TransitionSystem<S, A, P> ts, AlternatingSequence<S, A> next) {
         S stateFrom;
         A action;
         S stateTo;
