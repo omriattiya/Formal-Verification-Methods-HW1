@@ -12,7 +12,6 @@ import java.util.Set;
 public class ProgramGraphImpl<L, A> implements ProgramGraph<L, A> {
     private String name;
     private Set<L> locations;
-    private Set<A> actions;
     private Set<L> initials;
     private Set<PGTransition<L, A>> transitions;
     private Set<List<String>> initializations;
@@ -20,7 +19,6 @@ public class ProgramGraphImpl<L, A> implements ProgramGraph<L, A> {
 
     public ProgramGraphImpl() {
         locations = new HashSet<>();
-        actions = new HashSet<>();
         initials = new HashSet<>();
         transitions = new HashSet<>();
         initializations = new HashSet<>();

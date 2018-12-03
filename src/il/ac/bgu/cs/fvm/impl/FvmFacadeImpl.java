@@ -286,7 +286,60 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <L1, L2, A> ProgramGraph<Pair<L1, L2>, A> interleave
             (ProgramGraph<L1, A> pg1, ProgramGraph<L2, A> pg2) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement interleave
+        ProgramGraph<Pair<L1, L2>, A> interleavedPG = new ProgramGraphImpl<>();
+        interleavedPG.setName(pg1.getName() + "_interleaved_with_" + pg2.getName());
+
+
+        // Adding States
+        for (L1 pg1_loc : pg1.getLocations()) {
+            for (L2 pg2_loc : pg2.getLocations()) {
+                interleavedPG.addLocation(new Pair<>(pg1_loc, pg2_loc));
+            }
+        }
+
+        // Setting Initial States
+        for (Pair<L1, L2> pg_loc : interleavedPG.getLocations()) {
+            if (pg1.getInitialLocations().contains(pg_loc.first) && pg2.getInitialLocations().contains(pg_loc.second)) {
+                interleavedPG.setInitial(pg_loc, true);
+            }
+        }
+
+        // Adding Initialization Lists
+        for (List<String> pg1_initialization : pg1.getInitalizations()) {
+            for (List<String> pg2_initialization : pg2.getInitalizations()) {
+                List<String> all = new ArrayList<>(pg1_initialization);
+                all.addAll(pg2_initialization);
+                interleavedPG.addInitalization(all);
+            }
+        }
+
+        // Adding Transitions From PG1
+        for (PGTransition<L1, A> pg1_trans : pg1.getTransitions()) {
+            for (Pair<L1, L2> pg_location1 : interleavedPG.getLocations()) {
+                if (pg_location1.first.equals(pg1_trans.getFrom())) {
+                    for (Pair<L1, L2> pg_location2 : interleavedPG.getLocations()) {
+                        if (pg_location2.first.equals(pg1_trans.getTo()) && pg_location2.second.equals(pg_location1.second)) {
+                            interleavedPG.addTransition(new PGTransition<>(pg_location1, pg1_trans.getCondition(), pg1_trans.getAction(), pg_location2));
+                        }
+                    }
+                }
+            }
+        }
+        // Adding Transitions From PG2
+        for (PGTransition<L2, A> pg2_trans : pg2.getTransitions()) {
+            for (Pair<L1, L2> pg_location1 : interleavedPG.getLocations()) {
+                if (pg_location1.second.equals(pg2_trans.getFrom())) {
+                    for (Pair<L1, L2> pg_location2 : interleavedPG.getLocations()) {
+                        if (pg_location2.second.equals(pg2_trans.getTo()) && pg_location2.first.equals(pg_location1.first)) {
+                            interleavedPG.addTransition(new PGTransition<>(pg_location1, pg2_trans.getCondition(), pg2_trans.getAction(), pg_location2));
+                        }
+                    }
+                }
+            }
+        }
+
+
+        return interleavedPG;
     }
 
     @Override
@@ -359,8 +412,9 @@ public class FvmFacadeImpl implements FvmFacade {
         Stack<Pair<L, Map<String, Object>>> to_work_on = new Stack<>();
         Set<Transition<Pair<L, Map<String, Object>>, A>> transitions = new HashSet<>();
 
-        Map<String, Object> state_map = new HashMap<>();
+        Set<Map<String, Object>> state_maps = new HashSet<>();
         for (List<String> initialization_list : pg.getInitalizations()) {
+            Map<String, Object> state_map = new HashMap<>();
             for (String init_string : initialization_list) {
                 for (ActionDef ad : actionDefs) {
                     if (ad.isMatchingAction(init_string)) {
@@ -368,46 +422,52 @@ public class FvmFacadeImpl implements FvmFacade {
                     }
                 }
             }
+            state_maps.add(state_map);
         }
 
-        for (L init_loc : pg.getInitialLocations()) {
+        for (Map<String, Object> state_map : state_maps) {
+            for (L init_loc : pg.getInitialLocations()) {
 
-            to_work_on.push(new Pair<>(init_loc, state_map));
+                to_work_on.push(new Pair<>(init_loc, state_map));
 
-            while (!to_work_on.empty()) {
-                Pair<L, Map<String, Object>> current_loc = to_work_on.pop();
-                for (PGTransition<L, A> pg_transition : pg.getTransitions()) {
-                    if (pg_transition.getFrom().equals(current_loc.first)) {
-                        if (ConditionDef.evaluate(conditionDefs, current_loc.second, pg_transition.getCondition())) {
-                            Map<String, Object> new_state = current_loc.second;
-                            for (ActionDef ad : actionDefs) {
-                                if (ad.isMatchingAction(pg_transition.getAction())) {
-                                    new_state = ad.effect(current_loc.second, pg_transition.getAction());
-                                    break;
+                while (!to_work_on.empty()) {
+                    Pair<L, Map<String, Object>> current_loc = to_work_on.pop();
+                    for (PGTransition<L, A> pg_transition : pg.getTransitions()) {
+                        if (pg_transition.getFrom().equals(current_loc.first)) {
+                            if (ConditionDef.evaluate(conditionDefs, current_loc.second, pg_transition.getCondition())) {
+                                Map<String, Object> new_state = current_loc.second;
+                                for (ActionDef ad : actionDefs) {
+                                    if (ad.isMatchingAction(pg_transition.getAction())) {
+                                        new_state = ad.effect(current_loc.second, pg_transition.getAction());
+                                        break;
+                                    }
                                 }
-                            }
-                            transitions.add(new Transition<>(new Pair<>(current_loc.first, current_loc.second), pg_transition.getAction(), new Pair<>(pg_transition.getTo(), new_state)));
-                            if (!ts.getStates().contains(new Pair<>(pg_transition.getTo(), new_state))) {
-                                to_work_on.push(new Pair<>(pg_transition.getTo(), new_state));
+                                transitions.add(new Transition<>(new Pair<>(current_loc.first, current_loc.second), pg_transition.getAction(), new Pair<>(pg_transition.getTo(), new_state)));
+                                if (!ts.getStates().contains(new Pair<>(pg_transition.getTo(), new_state))) {
+                                    to_work_on.push(new Pair<>(pg_transition.getTo(), new_state));
+                                }
                             }
                         }
                     }
-                }
-                Pair<L, Map<String, Object>> state_to_add = new Pair<>(current_loc.first, current_loc.second);
-                ts.addStates(state_to_add);
-                ts.addAtomicPropositions(current_loc.first.toString());
-                ts.addToLabel(state_to_add, current_loc.first.toString());
-                for (String key : current_loc.second.keySet()) {
-                    ts.addAtomicPropositions(key + " = " + current_loc.second.get(key));
-                    ts.addToLabel(state_to_add, key + " = " + current_loc.second.get(key));
+                    Pair<L, Map<String, Object>> state_to_add = new Pair<>(current_loc.first, current_loc.second);
+                    ts.addStates(state_to_add);
+                    ts.addAtomicPropositions(current_loc.first.toString());
+                    ts.addToLabel(state_to_add, current_loc.first.toString());
+                    for (String key : current_loc.second.keySet()) {
+                        ts.addAtomicPropositions(key + " = " + current_loc.second.get(key));
+                        ts.addToLabel(state_to_add, key + " = " + current_loc.second.get(key));
+                    }
                 }
             }
         }
 
-        for (L init_loc : pg.getInitialLocations()) {
-            for (Pair<L, Map<String, Object>> state : ts.getStates()) {
-                if (state.first.equals(init_loc) && state.second.equals(state_map)) {
-                    ts.setInitial(state, true);
+
+        for (Map<String, Object> state_map : state_maps) {
+            for (L init_loc : pg.getInitialLocations()) {
+                for (Pair<L, Map<String, Object>> state : ts.getStates()) {
+                    if (state.first.equals(init_loc) && state.second.equals(state_map)) {
+                        ts.setInitial(state, true);
+                    }
                 }
             }
         }
@@ -691,6 +751,5 @@ public class FvmFacadeImpl implements FvmFacade {
 
         return next;
     }
-
 
 }
