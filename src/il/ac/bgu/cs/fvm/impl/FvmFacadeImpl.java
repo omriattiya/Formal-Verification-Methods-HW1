@@ -527,6 +527,7 @@ public class FvmFacadeImpl implements FvmFacade {
                 ts.addState(t.getTo());
             if (!ts.getActions().contains(t.getAction()))
                 ts.addAction(t.getAction());
+            ts.addTransition(t);
         }
 
 
