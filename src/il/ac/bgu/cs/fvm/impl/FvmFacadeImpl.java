@@ -538,12 +538,16 @@ public class FvmFacadeImpl implements FvmFacade {
 
         //atomic prop
         for (Pair<List<L>, Map<String, Object>> state : ts.getStates()) {
-            for (L small_state : state.getFirst())
+            for (L small_state : state.getFirst()) {
                 ts.addAtomicProposition(small_state.toString());
+                ts.addToLabel(state, small_state.toString());
+            }
             for (Map.Entry<String, Object> var_vals : state.getSecond().entrySet()) {
                 ts.addAtomicProposition(var_vals.getKey() + " = " + var_vals.getValue().toString());
+                ts.addToLabel(state, var_vals.getKey() + " = " + var_vals.getValue().toString());
             }
         }
+
         return ts;
     }
 
@@ -583,8 +587,13 @@ public class FvmFacadeImpl implements FvmFacade {
                                     myCopy.set(index, transition.getTo());
                                     myCopy.set(index2, transition2.getTo());
                                     Pair<List<L>, Map<String, Object>> newState = new Pair<>(myCopy, sync.effect(state.getSecond(), (A) newAction));
-                                    tranList.add(new Transition<>(state, (A) newAction, newState));
-                                    tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+                                    if (newState.second != null) {
+                                        if (!sawThem.contains(newState)) {
+                                            sawThem.add(newState);
+                                            tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+                                        }
+                                        tranList.add(new Transition<>(state, (A) newAction, newState));
+                                    }
                                 }
                             }
                             index2++;
@@ -596,10 +605,9 @@ public class FvmFacadeImpl implements FvmFacade {
                         if (newState.second != null) {
                             if (!sawThem.contains(newState)) {
                                 sawThem.add(newState);
-                                tranList.add(new Transition<>(state, transition.getAction(), newState));
                                 tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
                             }
-
+                            tranList.add(new Transition<>(state, transition.getAction(), newState));
                         }
 
                     }
