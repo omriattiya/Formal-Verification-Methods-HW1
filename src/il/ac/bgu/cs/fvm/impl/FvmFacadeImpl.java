@@ -4,16 +4,15 @@ import il.ac.bgu.cs.fvm.FvmFacade;
 import il.ac.bgu.cs.fvm.automata.Automaton;
 import il.ac.bgu.cs.fvm.automata.MultiColorAutomaton;
 import il.ac.bgu.cs.fvm.channelsystem.ChannelSystem;
+import il.ac.bgu.cs.fvm.channelsystem.InterleavingActDef;
+import il.ac.bgu.cs.fvm.channelsystem.ParserBasedInterleavingActDef;
 import il.ac.bgu.cs.fvm.circuits.Circuit;
 import il.ac.bgu.cs.fvm.exceptions.ActionNotFoundException;
 import il.ac.bgu.cs.fvm.exceptions.StateNotFoundException;
 import il.ac.bgu.cs.fvm.ltl.LTL;
 import il.ac.bgu.cs.fvm.nanopromela.NanoPromelaFileReader;
 import il.ac.bgu.cs.fvm.nanopromela.NanoPromelaParser;
-import il.ac.bgu.cs.fvm.programgraph.ActionDef;
-import il.ac.bgu.cs.fvm.programgraph.ConditionDef;
-import il.ac.bgu.cs.fvm.programgraph.PGTransition;
-import il.ac.bgu.cs.fvm.programgraph.ProgramGraph;
+import il.ac.bgu.cs.fvm.programgraph.*;
 import il.ac.bgu.cs.fvm.transitionsystem.AlternatingSequence;
 import il.ac.bgu.cs.fvm.transitionsystem.Transition;
 import il.ac.bgu.cs.fvm.transitionsystem.TransitionSystem;
@@ -272,6 +271,8 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <S1, S2, A, P> TransitionSystem<Pair<S1, S2>, A, P> interleave
             (TransitionSystem<S1, A, P> ts1, TransitionSystem<S2, A, P> ts2, Set<A> handShakingActions) {
+
+
         TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem = interleave_all_init_except_transition_and_name(ts1, ts2);
 
         // init transitions
@@ -408,7 +409,6 @@ public class FvmFacadeImpl implements FvmFacade {
         // remove unreachable
         remove_unreachable(ts);
         return ts;
-        //TODO : CHECK IT!!
     }
 
     @Override
@@ -432,7 +432,7 @@ public class FvmFacadeImpl implements FvmFacade {
             }
             state_maps.add(state_map);
         }
-        if(state_maps.size() == 0){
+        if (state_maps.size() == 0) {
             state_maps.add(new HashMap<>());
         }
 
@@ -495,7 +495,194 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <L, A> TransitionSystem<Pair<List<L>, Map<String, Object>>, A, String> transitionSystemFromChannelSystem
             (ChannelSystem<L, A> cs) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement transitionSystemFromChannelSystem
+
+        TransitionSystem<Pair<List<L>, Map<String, Object>>, A, String> ts = createTransitionSystem();
+
+
+        List<ProgramGraph<L, A>> pgList = cs.getProgramGraphs();
+
+        //states
+        Set<List<L>> list_of_states = make_states_pgs(pgList);
+        Set<Map<String, Object>> variables = make_variables_pgs(pgList);
+        Set<List<L>> list_of_init_states = make_init_states_pgs(pgList);
+        Set<Pair<List<L>, Map<String, Object>>> states = new HashSet<>();
+        Set<Pair<List<L>, Map<String, Object>>> init_states = new HashSet<>();
+
+        for (List<L> l : list_of_states)
+            for (Map<String, Object> m : variables)
+                states.add(new Pair<>(l, m));
+
+        for (Pair<List<L>, Map<String, Object>> p : states)
+            ts.addState(p);
+
+        for (List<L> l : list_of_init_states)
+            for (Map<String, Object> m : variables)
+                init_states.add(new Pair<>(l, m));
+
+        for (Pair<List<L>, Map<String, Object>> p : init_states)
+            ts.setInitial(p, true);
+
+        //actions
+        Set<A> actions = new HashSet<>();
+        for (ProgramGraph<L, A> pg : pgList) {
+            for (PGTransition<L, A> transition : pg.getTransitions()) {
+                actions.add(transition.getAction());
+            }
+        }
+
+        ActionDef async = new ParserBasedActDef();
+        InterleavingActDef sync = new ParserBasedInterleavingActDef();
+        ConditionDef cond = new ParserBasedCondDef();
+
+        for (Pair<List<L>, Map<String, Object>> state : init_states) {
+            recursive_transition(cs, state, 0, async, sync, cond);
+        }
+
+        return ts;
+    }
+
+    private <A, L> List<Transition<L, A>> recursive_transition(ChannelSystem<L, A> cs, Pair<List<L>, Map<String, Object>> state, int index, ActionDef async, InterleavingActDef sync, ConditionDef cond) {
+        List<Transition<L, A>> tranList = new LinkedList<>();
+        ProgramGraph<L, A> pg = cs.getProgramGraphs().get(index);
+        for (PGTransition<L, A> transition : pg.getTransitions()) {
+            if (state.getFirst().get(index).equals(transition.getFrom()))
+                if (cond.evaluate(state.getSecond(), transition.getCondition()))
+                    if (sync.isOneSidedAction(transition.getAction().toString())) {
+                        for (ProgramGraph<L, A> pgs : cs.getProgramGraphs()) {
+
+                        }
+                    }
+
+        }
+
+        return tranList;
+    }
+
+    private <A, L> Set<Map<String, Object>> make_variables_pgs(List<ProgramGraph<L, A>> pgList) {
+
+        Map<String, Set<Integer>> args = new HashMap<>();
+
+        for (ProgramGraph<L, A> pg : pgList) {
+            for (List<String> l : pg.getInitalizations()) {
+                for (String s : l) {
+                    String[] var_val = s.split(":=");
+                    for (int i = 0; i < var_val.length; i++) {
+                        var_val[i] = var_val[i].replaceAll("\\s+", "");
+                    }
+                    if (args.keySet().contains(var_val[0]))
+                        args.get(var_val[0]).add(Integer.valueOf((var_val[1])));
+                    else {
+                        Set<Integer> mySet = new HashSet<>();
+                        mySet.add(Integer.valueOf(var_val[1]));
+                        args.put(var_val[0], mySet);
+                    }
+                }
+            }
+        }
+
+        Set<Map<String, Object>> permotations = new HashSet<>();
+        int size = args.size();
+
+        Object[][] array_of_values = new Object[size][];
+
+        String[] array_of_vars = new String[size];
+        array_of_vars = args.keySet().toArray(array_of_vars);
+
+        int[] bases = new int[size];
+        int[] dynamic_number = new int[size];
+        int size_all = 1;
+
+        for (int i = 0; i < array_of_values.length; i++) {
+            array_of_values[i] = args.get(array_of_vars[i]).toArray();
+            bases[i] = array_of_values[i].length;
+            dynamic_number[i] = 0;
+            size_all = size_all * bases[i];
+        }
+
+        for (int i = 0; i < size_all; i++) {
+            Map<String, Object> map = new HashMap<>();
+            for (int j = 0; j < size; j++)
+                map.put(array_of_vars[i], array_of_values[dynamic_number[j]]);
+            permotations.add(map);
+
+            // update dynamic_number
+            updateDynamicArray(size, bases, dynamic_number);
+        }
+
+        return permotations;
+    }
+
+    private void updateDynamicArray(int size, int[] bases, int[] dynamic_number) {
+        boolean carry = true;
+        for (int k = size - 1; k >= 0; k--) {
+            if (carry && dynamic_number[k] + 1 == bases[k]) {
+                carry = true;
+                dynamic_number[k] = 0;
+            } else {
+                carry = false;
+                dynamic_number[k] = dynamic_number[k] + 1;
+            }
+        }
+    }
+
+    private <L, A> Set<List<L>> make_states_pgs(List<ProgramGraph<L, A>> pgList) {
+
+        Set<List<L>> state_list = new HashSet<>();
+        int size = pgList.size();
+
+        Object[][] array_of_locations = new Object[size][];
+        int[] bases = new int[size];
+        int[] dynamic_number = new int[size];
+        int size_all = 1;
+
+        for (int i = 0; i < array_of_locations.length; i++) {
+            array_of_locations[i] = pgList.get(i).getLocations().toArray();
+            bases[i] = array_of_locations[i].length;
+            dynamic_number[i] = 0;
+            size_all = size_all * bases[i];
+        }
+
+        for (int i = 0; i < size_all; i++) {
+            List<L> state = new LinkedList<>();
+            for (int j = 0; j < size; j++)
+                state.add((L) array_of_locations[j][dynamic_number[j]]);
+            state_list.add(state);
+
+            // update dynamic_number
+            updateDynamicArray(size, bases, dynamic_number);
+        }
+
+        return state_list;
+    }
+
+    private <L, A> Set<List<L>> make_init_states_pgs(List<ProgramGraph<L, A>> pgList) {
+
+        Set<List<L>> state_list = new HashSet<>();
+        int size = pgList.size();
+
+        Object[][] array_of_locations = new Object[size][];
+        int[] bases = new int[size];
+        int[] dynamic_number = new int[size];
+        int size_all = 1;
+
+        for (int i = 0; i < array_of_locations.length; i++) {
+            array_of_locations[i] = pgList.get(i).getInitialLocations().toArray();
+            bases[i] = array_of_locations[i].length;
+            dynamic_number[i] = 0;
+            size_all = size_all * bases[i];
+        }
+
+        for (int i = 0; i < size_all; i++) {
+            List<L> state = new LinkedList<>();
+            for (int j = 0; j < size; j++)
+                state.add((L) array_of_locations[j][dynamic_number[j]]);
+            state_list.add(state);
+
+            // update dynamic_number
+            updateDynamicArray(size, bases, dynamic_number);
+        }
+
+        return state_list;
     }
 
     @Override
@@ -690,10 +877,13 @@ public class FvmFacadeImpl implements FvmFacade {
     }
 
     private <S1, S2, A, P> void interleave_initStates
-            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<S1> states, Set<S2> states2) {
+            (TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem, Set<S1> states, Set<S2> states2, boolean isInitial) {
         Set<Pair<S1, S2>> interleaveStates = s1_x_s2(states, states2);
-        for (Pair<S1, S2> s : interleaveStates)
+        for (Pair<S1, S2> s : interleaveStates) {
             interleaveTransitionSystem.addState(s);
+            if (isInitial)
+                interleaveTransitionSystem.setInitial(s, true);
+        }
     }
 
     // returns a set of pairs that consists of S1xS2
@@ -713,10 +903,10 @@ public class FvmFacadeImpl implements FvmFacade {
         TransitionSystem<Pair<S1, S2>, A, P> interleaveTransitionSystem = createTransitionSystem();
 
         // init states
-        interleave_initStates(interleaveTransitionSystem, ts1.getStates(), ts2.getStates());
+        interleave_initStates(interleaveTransitionSystem, ts1.getStates(), ts2.getStates(), false);
 
         // init initials
-        interleave_initStates(interleaveTransitionSystem, ts1.getInitialStates(), ts2.getInitialStates());
+        interleave_initStates(interleaveTransitionSystem, ts1.getInitialStates(), ts2.getInitialStates(), true);
 
         // init actions
         interleave_initActions(interleaveTransitionSystem, ts1.getActions());
@@ -765,167 +955,150 @@ public class FvmFacadeImpl implements FvmFacade {
     }
 
 
-    private ProgramGraph<String, String> programGraphFromParsedNanoPromela(NanoPromelaParser.StmtContext tree){
-        ProgramGraphImpl<String,String> pg = new ProgramGraphImpl<>();
-        return eliminateUnreachableLocations(connectLocations(pg,sub(tree), tree));
+    private ProgramGraph<String, String> programGraphFromParsedNanoPromela(NanoPromelaParser.StmtContext tree) {
+        ProgramGraphImpl<String, String> pg = new ProgramGraphImpl<>();
+        return eliminateUnreachableLocations(connectLocations(pg, sub(tree), tree));
     }
 
-    private Set<ParserRuleContext> sub(ParserRuleContext tree){
+    private Set<ParserRuleContext> sub(ParserRuleContext tree) {
         Set<ParserRuleContext> locations = new HashSet<>();
 
-        if(tree.children == null){ //Try to remove this and see if it's still working.
+        if (tree.children == null) { //Try to remove this and see if it's still working.
             return locations;
         }
 
-        if(tree instanceof NanoPromelaParser.StmtContext){
+        if (tree instanceof NanoPromelaParser.StmtContext) {
             NanoPromelaParser.StmtContext casted_child = (NanoPromelaParser.StmtContext) tree;
             Set<ParserRuleContext> sub_stmt1 = sub((ParserRuleContext) casted_child.children.get(0));
-            if(casted_child.children.size() == 3){
-                if(((NanoPromelaParser.StmtContext)casted_child.children.get(2)).children != null){
+            if (casted_child.children.size() == 3) {
+                if (((NanoPromelaParser.StmtContext) casted_child.children.get(2)).children != null) {
                     Set<ParserRuleContext> sub_stmt2 = sub((ParserRuleContext) casted_child.children.get(2));
-                    for(ParserRuleContext loc :sub_stmt1){
-                        NanoPromelaParser.StmtContext sc = new NanoPromelaParser.StmtContext(null,71);
-                        NanoPromelaParser.StmtContext loc_sc = new NanoPromelaParser.StmtContext(sc,71);
+                    for (ParserRuleContext loc : sub_stmt1) {
+                        NanoPromelaParser.StmtContext sc = new NanoPromelaParser.StmtContext(null, 71);
+                        NanoPromelaParser.StmtContext loc_sc = new NanoPromelaParser.StmtContext(sc, 71);
                         loc_sc.addChild(loc);
                         sc.addChild(loc_sc);
-                        sc.addChild(new TerminalNodeImpl(new CommonToken(0,";")));
+                        sc.addChild(new TerminalNodeImpl(new CommonToken(0, ";")));
                         sc.addChild((RuleContext) casted_child.children.get(2));
                         //locations.add(loc+";"+casted_child.children.get(2).getText());
                         locations.add(sc);
                         locations.addAll(sub_stmt2);
                     }
-                }
-                else{
+                } else {
                     locations.addAll(sub_stmt1);
                 }
-            }
-            else{
+            } else {
                 locations.addAll(sub_stmt1);
             }
-        }
-        else if(tree instanceof NanoPromelaParser.IfstmtContext){
-            for(int i = 1; i < tree.children.size() -1; i++){
+        } else if (tree instanceof NanoPromelaParser.IfstmtContext) {
+            for (int i = 1; i < tree.children.size() - 1; i++) {
                 locations.addAll(sub((ParserRuleContext) ((NanoPromelaParser.IfstmtContext) tree).children.get(i)));
             }
             locations.add(tree);
             //locations.add("");
-        }
-        else if(tree instanceof NanoPromelaParser.DostmtContext){
+        } else if (tree instanceof NanoPromelaParser.DostmtContext) {
             locations.add(tree);
             //locations.add("");
-            for(int i = 1; i < tree.children.size() -1; i++){
+            for (int i = 1; i < tree.children.size() - 1; i++) {
                 Set<ParserRuleContext> result = sub((ParserRuleContext) ((NanoPromelaParser.DostmtContext) tree).children.get(i));
-                for(ParserRuleContext loc : result){
-                    NanoPromelaParser.StmtContext sc = new NanoPromelaParser.StmtContext(null,71);
-                    NanoPromelaParser.StmtContext loc_sc = new NanoPromelaParser.StmtContext(sc,71);
+                for (ParserRuleContext loc : result) {
+                    NanoPromelaParser.StmtContext sc = new NanoPromelaParser.StmtContext(null, 71);
+                    NanoPromelaParser.StmtContext loc_sc = new NanoPromelaParser.StmtContext(sc, 71);
                     loc_sc.addChild(loc);
                     sc.addChild(loc_sc);
-                    sc.addChild(new TerminalNodeImpl(new CommonToken(0,";")));
+                    sc.addChild(new TerminalNodeImpl(new CommonToken(0, ";")));
                     sc.addChild(tree);
 
                     //locations.add(loc+";"+tree.getText());
                     locations.add(sc);
                 }
             }
-        }
-        else if(tree instanceof NanoPromelaParser.AssstmtContext){
+        } else if (tree instanceof NanoPromelaParser.AssstmtContext) {
             //locations.add("");
             locations.add(tree);
-        }
-        else if(tree instanceof NanoPromelaParser.ChanreadstmtContext){
+        } else if (tree instanceof NanoPromelaParser.ChanreadstmtContext) {
             //locations.add("");
             locations.add(tree);
-        }
-        else if(tree instanceof NanoPromelaParser.ChanwritestmtContext){
+        } else if (tree instanceof NanoPromelaParser.ChanwritestmtContext) {
             //locations.add("");
             locations.add(tree);
-        }
-        else if(tree instanceof NanoPromelaParser.SkipstmtContext){
+        } else if (tree instanceof NanoPromelaParser.SkipstmtContext) {
             //locations.add("");
             locations.add(tree);
-        }
-        else if(tree instanceof NanoPromelaParser.AtomicstmtContext){
+        } else if (tree instanceof NanoPromelaParser.AtomicstmtContext) {
             //locations.add("");
             locations.add(tree);
-        }
-        else if(tree instanceof NanoPromelaParser.OptionContext){
+        } else if (tree instanceof NanoPromelaParser.OptionContext) {
             locations.addAll(sub((ParserRuleContext) ((NanoPromelaParser.OptionContext) tree).children.get(3)));
         }
 
         return locations;
     }
 
-    private ProgramGraph<String, String> connectLocations(ProgramGraph<String,String> pg, Set<ParserRuleContext> sub, NanoPromelaParser.StmtContext tree) {
+    private ProgramGraph<String, String> connectLocations(ProgramGraph<String, String> pg, Set<ParserRuleContext> sub, NanoPromelaParser.StmtContext tree) {
         pg.setName("");
         pg.addLocation("");
-        for(ParserRuleContext loc : sub){
+        for (ParserRuleContext loc : sub) {
             pg.addLocation(loc.getText());
-            Set<PGTransition<String,String>> transitions = inferTransition(loc);
-            for(PGTransition<String,String> transition : transitions){
+            Set<PGTransition<String, String>> transitions = inferTransition(loc);
+            for (PGTransition<String, String> transition : transitions) {
                 pg.addTransition(transition);
             }
         }
-        pg.setInitial(tree.getText(),true);
+        pg.setInitial(tree.getText(), true);
         return pg;
     }
 
-    private Set<PGTransition<String,String>> inferTransition(ParserRuleContext loc) {
-        Set<PGTransition<String,String>> transitions = new HashSet<>();
-        Pair<String,String> cond_act;
+    private Set<PGTransition<String, String>> inferTransition(ParserRuleContext loc) {
+        Set<PGTransition<String, String>> transitions = new HashSet<>();
+        Pair<String, String> cond_act;
         if ((cond_act = canTransitToExit(loc)) != null) {
-            transitions.add(new PGTransition<>(loc.getText(),cond_act.first,cond_act.second,""));
+            transitions.add(new PGTransition<>(loc.getText(), cond_act.first, cond_act.second, ""));
+        } else if (loc instanceof NanoPromelaParser.StmtContext && loc.children.size() == 1 && ((cond_act = canTransitToExit((ParserRuleContext) loc.children.get(0))) != null)) {
+            transitions.add(new PGTransition<>(loc.getText(), cond_act.first, cond_act.second, ""));
         }
-        else if(loc instanceof NanoPromelaParser.StmtContext && loc.children.size() == 1 && ((cond_act = canTransitToExit((ParserRuleContext) loc.children.get(0))) != null)){
-            transitions.add(new PGTransition<>(loc.getText(),cond_act.first,cond_act.second,""));
-        }
-        if(loc.children.size() == 1 && loc instanceof NanoPromelaParser.StmtContext){
-            Set<PGTransition<String,String>> inferred_transitions = inferTransition((ParserRuleContext) loc.children.get(0));
+        if (loc.children.size() == 1 && loc instanceof NanoPromelaParser.StmtContext) {
+            Set<PGTransition<String, String>> inferred_transitions = inferTransition((ParserRuleContext) loc.children.get(0));
             transitions.addAll(inferred_transitions);
-        }
-        else if(loc.children.get(0) instanceof NanoPromelaParser.StmtContext){
-            if(((ParserRuleContext) loc.children.get(2)).children != null){
-                Set<PGTransition<String,String>> inferred_transitions = inferTransition((ParserRuleContext) loc.children.get(0));
-                for(PGTransition<String,String> inferred_transition : inferred_transitions){
-                    if(inferred_transition.getTo().equals("")){
+        } else if (loc.children.get(0) instanceof NanoPromelaParser.StmtContext) {
+            if (((ParserRuleContext) loc.children.get(2)).children != null) {
+                Set<PGTransition<String, String>> inferred_transitions = inferTransition((ParserRuleContext) loc.children.get(0));
+                for (PGTransition<String, String> inferred_transition : inferred_transitions) {
+                    if (inferred_transition.getTo().equals("")) {
                         transitions.add(new PGTransition<>(loc.getText()
-                                ,inferred_transition.getCondition(),inferred_transition.getAction(),loc.children.get(2).getText()));
-                    }
-                    else{
+                                , inferred_transition.getCondition(), inferred_transition.getAction(), loc.children.get(2).getText()));
+                    } else {
                         transitions.add(new PGTransition<>(loc.getText(), inferred_transition.getCondition(),
-                                inferred_transition.getAction(), inferred_transition.getTo()+";"+loc.children.get(2).getText()));
+                                inferred_transition.getAction(), inferred_transition.getTo() + ";" + loc.children.get(2).getText()));
                     }
                 }
-            }
-            else{
-                Set<PGTransition<String,String>> inferred_transitions = inferTransition((ParserRuleContext) loc.children.get(0));
+            } else {
+                Set<PGTransition<String, String>> inferred_transitions = inferTransition((ParserRuleContext) loc.children.get(0));
                 transitions.addAll(inferred_transitions);
             }
 
-        }
-        else if(loc instanceof NanoPromelaParser.IfstmtContext){
-            for(int i = 1; i < ((NanoPromelaParser.IfstmtContext) loc).children.size() - 1; i++){
+        } else if (loc instanceof NanoPromelaParser.IfstmtContext) {
+            for (int i = 1; i < ((NanoPromelaParser.IfstmtContext) loc).children.size() - 1; i++) {
                 NanoPromelaParser.OptionContext option_context =
                         (NanoPromelaParser.OptionContext) ((NanoPromelaParser.IfstmtContext) loc).children.get(i);
-                Set<PGTransition<String,String>> inferred_transitions = inferTransition((ParserRuleContext) option_context.children.get(3));
-                for(PGTransition<String,String> inferred_transition : inferred_transitions){
-                    transitions.add(new PGTransition<>(loc.getText(), "("+option_context.children.get(1).getText()+")" + (inferred_transition.getCondition().equals("") ? "" : (" && (" + inferred_transition.getCondition()+")")),
+                Set<PGTransition<String, String>> inferred_transitions = inferTransition((ParserRuleContext) option_context.children.get(3));
+                for (PGTransition<String, String> inferred_transition : inferred_transitions) {
+                    transitions.add(new PGTransition<>(loc.getText(), "(" + option_context.children.get(1).getText() + ")" + (inferred_transition.getCondition().equals("") ? "" : (" && (" + inferred_transition.getCondition() + ")")),
                             inferred_transition.getAction(), inferred_transition.getTo()));
                 }
             }
-        }
-        else if(loc instanceof NanoPromelaParser.DostmtContext){
-            for(int i = 1; i < ((NanoPromelaParser.DostmtContext) loc).children.size() - 1; i++){
+        } else if (loc instanceof NanoPromelaParser.DostmtContext) {
+            for (int i = 1; i < ((NanoPromelaParser.DostmtContext) loc).children.size() - 1; i++) {
                 NanoPromelaParser.OptionContext option_context =
                         (NanoPromelaParser.OptionContext) ((NanoPromelaParser.DostmtContext) loc).children.get(i);
-                Set<PGTransition<String,String>> inferred_transitions = inferTransition((ParserRuleContext) option_context.children.get(3));
-                for(PGTransition<String,String> inferred_transition : inferred_transitions){
-                    if(inferred_transition.getTo().equals("")){
-                        transitions.add(new PGTransition<>(loc.getText(), "("+option_context.children.get(1).getText()+")" + (inferred_transition.getCondition().equals("") ? "" : (" && (" + inferred_transition.getCondition()+")")),
-                            inferred_transition.getAction(),loc.getText()));
-                    }
-                    else{
-                        transitions.add(new PGTransition<>(loc.getText(), "("+option_context.children.get(1).getText()+")" + (inferred_transition.getCondition().equals("") ? "" : (" && (" + inferred_transition.getCondition()+")")),
-                                inferred_transition.getAction(),inferred_transition.getTo()+";"+loc.getText()));
+                Set<PGTransition<String, String>> inferred_transitions = inferTransition((ParserRuleContext) option_context.children.get(3));
+                for (PGTransition<String, String> inferred_transition : inferred_transitions) {
+                    if (inferred_transition.getTo().equals("")) {
+                        transitions.add(new PGTransition<>(loc.getText(), "(" + option_context.children.get(1).getText() + ")" + (inferred_transition.getCondition().equals("") ? "" : (" && (" + inferred_transition.getCondition() + ")")),
+                                inferred_transition.getAction(), loc.getText()));
+                    } else {
+                        transitions.add(new PGTransition<>(loc.getText(), "(" + option_context.children.get(1).getText() + ")" + (inferred_transition.getCondition().equals("") ? "" : (" && (" + inferred_transition.getCondition() + ")")),
+                                inferred_transition.getAction(), inferred_transition.getTo() + ";" + loc.getText()));
                     }
                 }
             }
@@ -934,25 +1107,24 @@ public class FvmFacadeImpl implements FvmFacade {
         return transitions;
     }
 
-    private Pair<String,String> canTransitToExit(ParserRuleContext stmt){
-        if (stmt instanceof NanoPromelaParser.SkipstmtContext) return new Pair<>("",stmt.getText());
-        else if (stmt instanceof NanoPromelaParser.AssstmtContext) return new Pair<>("",stmt.getText());
-        else if (stmt instanceof NanoPromelaParser.ChanwritestmtContext) return new Pair<>("",stmt.getText());
-        else if (stmt instanceof NanoPromelaParser.ChanreadstmtContext) return new Pair<>("",stmt.getText());
-        else if (stmt instanceof NanoPromelaParser.AtomicstmtContext) return new Pair<>("",stmt.getText());
-        else if (stmt instanceof NanoPromelaParser.DostmtContext){
+    private Pair<String, String> canTransitToExit(ParserRuleContext stmt) {
+        if (stmt instanceof NanoPromelaParser.SkipstmtContext) return new Pair<>("", stmt.getText());
+        else if (stmt instanceof NanoPromelaParser.AssstmtContext) return new Pair<>("", stmt.getText());
+        else if (stmt instanceof NanoPromelaParser.ChanwritestmtContext) return new Pair<>("", stmt.getText());
+        else if (stmt instanceof NanoPromelaParser.ChanreadstmtContext) return new Pair<>("", stmt.getText());
+        else if (stmt instanceof NanoPromelaParser.AtomicstmtContext) return new Pair<>("", stmt.getText());
+        else if (stmt instanceof NanoPromelaParser.DostmtContext) {
             StringBuilder condition = new StringBuilder();
             NanoPromelaParser.DostmtContext do_stmt = (NanoPromelaParser.DostmtContext) stmt;
-            for(int i = 1; i < do_stmt.children.size()-1; i++)
-            {
+            for (int i = 1; i < do_stmt.children.size() - 1; i++) {
                 condition.append("!((").append(((NanoPromelaParser.OptionContext) do_stmt.children.get(i)).children.get(1).getText()).append(")) && ");
             }
-            return new Pair<>(condition.substring(0,condition.length()-4),"");
+            return new Pair<>(condition.substring(0, condition.length() - 4), "");
         }
         return null;
     }
 
-    private ProgramGraph<String,String> eliminateUnreachableLocations(ProgramGraph<String,String> pg){
+    private ProgramGraph<String, String> eliminateUnreachableLocations(ProgramGraph<String, String> pg) {
 
         Set<String> reachableLocations = new HashSet<>();
         Set<String> currentlyDiscovering = new HashSet<>();
@@ -975,21 +1147,21 @@ public class FvmFacadeImpl implements FvmFacade {
             }
         }
         Set<String> locations_to_remove = new HashSet<>();
-        for(String loc : pg.getLocations()){
-            if(! reachableLocations.contains(loc)){
-                Set<PGTransition<String,String>> transitions_to_remove = new HashSet<>();
-                for(PGTransition<String,String> pg_transition : pg.getTransitions()){
-                    if(pg_transition.getFrom().equals(loc) || pg_transition.getTo().equals(loc)){
+        for (String loc : pg.getLocations()) {
+            if (!reachableLocations.contains(loc)) {
+                Set<PGTransition<String, String>> transitions_to_remove = new HashSet<>();
+                for (PGTransition<String, String> pg_transition : pg.getTransitions()) {
+                    if (pg_transition.getFrom().equals(loc) || pg_transition.getTo().equals(loc)) {
                         transitions_to_remove.add(pg_transition);
                     }
                 }
-                for(PGTransition<String,String> transition_to_remove : transitions_to_remove){
+                for (PGTransition<String, String> transition_to_remove : transitions_to_remove) {
                     pg.removeTransition(transition_to_remove);
                 }
                 locations_to_remove.add(loc);
             }
         }
-        for(String location_to_remove : locations_to_remove){
+        for (String location_to_remove : locations_to_remove) {
             pg.removeLocation(location_to_remove);
         }
 
@@ -997,9 +1169,9 @@ public class FvmFacadeImpl implements FvmFacade {
     }
 
 
-    public Set<String> post(ProgramGraph<String,String> pg, String location) {
+    public Set<String> post(ProgramGraph<String, String> pg, String location) {
         Set<String> post_locations = new HashSet<>();
-        for (PGTransition<String,String> transition : pg.getTransitions()) {
+        for (PGTransition<String, String> transition : pg.getTransitions()) {
             if (transition.getFrom().equals(location))
                 post_locations.add(transition.getTo());
         }
