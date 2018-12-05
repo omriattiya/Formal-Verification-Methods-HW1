@@ -578,11 +578,15 @@ public class FvmFacadeImpl implements FvmFacade {
                                 if ((actionString.contains("!") && actionString2.contains("?") && channel[0].equals(channel2[0])) ||
                                         (actionString.contains("?") && actionString2.contains("!") && channel[0].equals(channel2[0]))) {
                                     String newAction = channel[0];
-                                    if (actionString.contains("!"))
-                                        newAction = newAction.concat("!");
-                                    else
+                                    if (actionString.contains("!")) {
+                                        newAction = newAction.concat("!|");
+                                        newAction = newAction.concat(channel2[0]);
                                         newAction = newAction.concat("?");
-                                    newAction = newAction.concat(channel2[0]);
+                                    } else {
+                                        newAction = newAction.concat("?|");
+                                        newAction = newAction.concat(channel2[0]);
+                                        newAction = newAction.concat("!");
+                                    }
                                     List<L> myCopy = new LinkedList<>(state.getFirst());
                                     myCopy.set(index, transition.getTo());
                                     myCopy.set(index2, transition2.getTo());
