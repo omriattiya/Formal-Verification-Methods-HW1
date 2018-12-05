@@ -19,10 +19,8 @@ import il.ac.bgu.cs.fvm.transitionsystem.TransitionSystem;
 import il.ac.bgu.cs.fvm.util.Pair;
 import il.ac.bgu.cs.fvm.verification.VerificationResult;
 import org.antlr.v4.runtime.CommonToken;
-import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.RuleContext;
-import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNodeImpl;
 
 import java.io.InputStream;
@@ -502,59 +500,111 @@ public class FvmFacadeImpl implements FvmFacade {
         List<ProgramGraph<L, A>> pgList = cs.getProgramGraphs();
 
         //states
-        Set<List<L>> list_of_states = make_states_pgs(pgList);
         Set<Map<String, Object>> variables = make_variables_pgs(pgList);
         Set<List<L>> list_of_init_states = make_init_states_pgs(pgList);
-        Set<Pair<List<L>, Map<String, Object>>> states = new HashSet<>();
         Set<Pair<List<L>, Map<String, Object>>> init_states = new HashSet<>();
 
-        for (List<L> l : list_of_states)
-            for (Map<String, Object> m : variables)
-                states.add(new Pair<>(l, m));
 
-        for (Pair<List<L>, Map<String, Object>> p : states)
-            ts.addState(p);
+        ActionDef async = new ParserBasedActDef();
+        InterleavingActDef sync = new ParserBasedInterleavingActDef();
+        ConditionDef cond = new ParserBasedCondDef();
+        List<Transition<Pair<List<L>, Map<String, Object>>, A>> transitionList = new LinkedList<>();
+        Set<Pair<List<L>, Map<String, Object>>> sawThem = new HashSet<>();
 
         for (List<L> l : list_of_init_states)
             for (Map<String, Object> m : variables)
                 init_states.add(new Pair<>(l, m));
 
-        for (Pair<List<L>, Map<String, Object>> p : init_states)
-            ts.setInitial(p, true);
-
-        //actions
-        Set<A> actions = new HashSet<>();
-        for (ProgramGraph<L, A> pg : pgList) {
-            for (PGTransition<L, A> transition : pg.getTransitions()) {
-                actions.add(transition.getAction());
-            }
-        }
-
-        ActionDef async = new ParserBasedActDef();
-        InterleavingActDef sync = new ParserBasedInterleavingActDef();
-        ConditionDef cond = new ParserBasedCondDef();
 
         for (Pair<List<L>, Map<String, Object>> state : init_states) {
-            recursive_transition(cs, state, 0, async, sync, cond);
+            transitionList.addAll(recursive_transition(cs, state, 0, async, sync, cond, ts, sawThem));
         }
 
+        for (Transition<Pair<List<L>, Map<String, Object>>, A> t : transitionList) {
+            if (!ts.getStates().contains(t.getFrom()))
+                ts.addState(t.getFrom());
+            if (!ts.getStates().contains(t.getTo()))
+                ts.addState(t.getTo());
+            if (!ts.getActions().contains(t.getAction()))
+                ts.addAction(t.getAction());
+        }
+
+
+        for (Pair<List<L>, Map<String, Object>> p : init_states) {
+            ts.addState(p);
+            ts.setInitial(p, true);
+        }
+
+        //atomic prop
+        for (Pair<List<L>, Map<String, Object>> state : ts.getStates()) {
+            for (L small_state : state.getFirst())
+                ts.addAtomicProposition(small_state.toString());
+            for (Map.Entry<String, Object> var_vals : state.getSecond().entrySet()) {
+                ts.addAtomicProposition(var_vals.getKey() + " = " + var_vals.getValue().toString());
+            }
+        }
         return ts;
     }
 
-    private <A, L> List<Transition<L, A>> recursive_transition(ChannelSystem<L, A> cs, Pair<List<L>, Map<String, Object>> state, int index, ActionDef async, InterleavingActDef sync, ConditionDef cond) {
-        List<Transition<L, A>> tranList = new LinkedList<>();
+    private <A, L> List<Transition<Pair<List<L>, Map<String, Object>>, A>> recursive_transition(ChannelSystem<L, A> cs, Pair<List<L>, Map<String, Object>> state, int index, ActionDef async, InterleavingActDef sync, ConditionDef cond, TransitionSystem<Pair<List<L>, Map<String, Object>>, A, String> ts, Set<Pair<List<L>, Map<String, Object>>> sawThem) {
+        List<Transition<Pair<List<L>, Map<String, Object>>, A>> tranList = new LinkedList<>();
+        if (index == cs.getProgramGraphs().size())
+            return tranList;
         ProgramGraph<L, A> pg = cs.getProgramGraphs().get(index);
         for (PGTransition<L, A> transition : pg.getTransitions()) {
             if (state.getFirst().get(index).equals(transition.getFrom()))
-                if (cond.evaluate(state.getSecond(), transition.getCondition()))
+                if (cond.evaluate(state.getSecond(), transition.getCondition())) {
+                    String actionString = transition.getAction().toString();
+                    String[] channel;
+                    if (actionString.contains("!"))
+                        channel = actionString.split("!");
+                    else
+                        channel = actionString.split("\\?");
                     if (sync.isOneSidedAction(transition.getAction().toString())) {
+                        int index2 = 0;
                         for (ProgramGraph<L, A> pgs : cs.getProgramGraphs()) {
+                            for (PGTransition<L, A> transition2 : pgs.getTransitions()) {
+                                String actionString2 = transition.getAction().toString();
+                                String[] channel2;
+                                if (actionString2.contains("!"))
+                                    channel2 = actionString2.split("!");
+                                else
+                                    channel2 = actionString2.split("\\?");
+                                if ((actionString.contains("!") && actionString2.contains("?") && channel[0].equals(channel2[0])) ||
+                                        (actionString.contains("?") && actionString2.contains("!") && channel[0].equals(channel2[0]))) {
+                                    String newAction = channel[0];
+                                    if (actionString.contains("!"))
+                                        newAction = newAction.concat("!");
+                                    else
+                                        newAction = newAction.concat("?");
+                                    newAction = newAction.concat(channel2[0]);
+                                    List<L> myCopy = new LinkedList<>(state.getFirst());
+                                    myCopy.set(index, transition.getTo());
+                                    myCopy.set(index2, transition2.getTo());
+                                    Pair<List<L>, Map<String, Object>> newState = new Pair<>(myCopy, sync.effect(state.getSecond(), (A) newAction));
+                                    tranList.add(new Transition<>(state, (A) newAction, newState));
+                                    tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+                                }
+                            }
+                            index2++;
+                        }
+                    } else {
+                        List<L> myCopy = new LinkedList<>(state.getFirst());
+                        myCopy.set(index, transition.getTo());
+                        Pair<List<L>, Map<String, Object>> newState = new Pair<>(myCopy, async.effect(state.getSecond(), transition.getAction()));
+                        if (newState.second != null) {
+                            if (!sawThem.contains(newState)) {
+                                sawThem.add(newState);
+                                tranList.add(new Transition<>(state, transition.getAction(), newState));
+                                tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+                            }
 
                         }
+
                     }
-
+                }
         }
-
+        tranList.addAll(recursive_transition(cs, state, index + 1, async, sync, cond, ts, sawThem));
         return tranList;
     }
 
@@ -602,7 +652,7 @@ public class FvmFacadeImpl implements FvmFacade {
         for (int i = 0; i < size_all; i++) {
             Map<String, Object> map = new HashMap<>();
             for (int j = 0; j < size; j++)
-                map.put(array_of_vars[i], array_of_values[dynamic_number[j]]);
+                map.put(array_of_vars[j], array_of_values[j][dynamic_number[j]]); //the i here might be j
             permotations.add(map);
 
             // update dynamic_number
