@@ -517,6 +517,7 @@ public class FvmFacadeImpl implements FvmFacade {
 
 
         for (Pair<List<L>, Map<String, Object>> state : init_states) {
+            sawThem.add(state);
             transitionList.addAll(recursive_transition(cs, state, 0, async, sync, cond, ts, sawThem));
         }
 
@@ -556,47 +557,40 @@ public class FvmFacadeImpl implements FvmFacade {
         if (index == cs.getProgramGraphs().size())
             return tranList;
         ProgramGraph<L, A> pg = cs.getProgramGraphs().get(index);
+
         for (PGTransition<L, A> transition : pg.getTransitions()) {
             if (state.getFirst().get(index).equals(transition.getFrom()))
                 if (cond.evaluate(state.getSecond(), transition.getCondition())) {
                     String actionString = transition.getAction().toString();
-                    String[] channel;
-                    if (actionString.contains("!"))
-                        channel = actionString.split("!");
-                    else
-                        channel = actionString.split("\\?");
                     if (sync.isOneSidedAction(transition.getAction().toString())) {
                         int index2 = 0;
                         for (ProgramGraph<L, A> pgs : cs.getProgramGraphs()) {
                             for (PGTransition<L, A> transition2 : pgs.getTransitions()) {
-                                String actionString2 = transition.getAction().toString();
-                                String[] channel2;
-                                if (actionString2.contains("!"))
-                                    channel2 = actionString2.split("!");
-                                else
-                                    channel2 = actionString2.split("\\?");
-                                if ((actionString.contains("!") && actionString2.contains("?") && channel[0].equals(channel2[0])) ||
-                                        (actionString.contains("?") && actionString2.contains("!") && channel[0].equals(channel2[0]))) {
-                                    String newAction = channel[0];
-                                    if (actionString.contains("!")) {
-                                        newAction = newAction.concat("!|");
-                                        newAction = newAction.concat(channel2[0]);
-                                        newAction = newAction.concat("?");
-                                    } else {
-                                        newAction = newAction.concat("?|");
-                                        newAction = newAction.concat(channel2[0]);
-                                        newAction = newAction.concat("!");
-                                    }
-                                    List<L> myCopy = new LinkedList<>(state.getFirst());
-                                    myCopy.set(index, transition.getTo());
-                                    myCopy.set(index2, transition2.getTo());
-                                    Pair<List<L>, Map<String, Object>> newState = new Pair<>(myCopy, sync.effect(state.getSecond(), (A) newAction));
-                                    if (newState.second != null) {
-                                        if (!sawThem.contains(newState)) {
-                                            sawThem.add(newState);
-                                            tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+                                String actionString2 = transition2.getAction().toString();
+                                if (state.getFirst().get(index2).equals(transition2.getFrom()) && sync.isOneSidedAction(transition2.getAction().toString())) {
+
+                                    if (((actionString.contains("!") && actionString2.contains("?")) ||
+                                            (actionString.contains("?") && actionString2.contains("!"))) &&
+                                            actionString.substring(0, actionString.length() - 1).equals(actionString2.substring(0, actionString2.length() - 1))) {
+                                        if (cond.evaluate(state.getSecond(), transition2.getCondition())) {
+                                            String newAction = "";
+                                            if (index < index2)
+                                                newAction = actionString + "|" + actionString2;
+                                            else
+                                                newAction = actionString2 + "|" + actionString;
+                                            List<L> myCopy = new LinkedList<>(state.getFirst());
+                                            myCopy.set(index, transition.getTo());
+                                            myCopy.set(index2, transition2.getTo());
+                                            A castAction = (A) newAction;
+
+                                            Pair<List<L>, Map<String, Object>> newState = new Pair<>(myCopy, sync.effect(state.getSecond(), castAction));
+                                            if (!sawThem.contains(newState)) {
+                                                sawThem.add(newState);
+                                                tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+                                            }
+                                            tranList.add(new Transition<>(state, castAction, newState));
+
                                         }
-                                        tranList.add(new Transition<>(state, (A) newAction, newState));
                                     }
                                 }
                             }
@@ -610,6 +604,7 @@ public class FvmFacadeImpl implements FvmFacade {
                             if (!sawThem.contains(newState)) {
                                 sawThem.add(newState);
                                 tranList.addAll(recursive_transition(cs, newState, 0, async, sync, cond, ts, sawThem));
+
                             }
                             tranList.add(new Transition<>(state, transition.getAction(), newState));
                         }
@@ -620,6 +615,7 @@ public class FvmFacadeImpl implements FvmFacade {
         tranList.addAll(recursive_transition(cs, state, index + 1, async, sync, cond, ts, sawThem));
         return tranList;
     }
+
 
     private <A, L> Set<Map<String, Object>> make_variables_pgs(List<ProgramGraph<L, A>> pgList) {
 
