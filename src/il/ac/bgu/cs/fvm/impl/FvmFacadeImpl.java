@@ -747,7 +747,76 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <Sts, Saut, A, P> TransitionSystem<Pair<Sts, Saut>, A, Saut> product
             (TransitionSystem<Sts, A, P> ts, Automaton<Saut, P> aut) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement product
+        TransitionSystem<Pair<Sts, Saut>, A, Saut> transitionSystem = new TransitionSystemImpl<>();
+        transitionSystem.setName(ts.getName() + "with_automaton");
+
+        Set<Transition<Pair<Sts,Saut>,A>> transitions = new HashSet<>();
+
+        for (Transition<Sts, A> ts_transition : ts.getTransitions()) {
+            for (Saut auto_state : aut.getTransitions().keySet()) {
+                for(Set<P> tagging : aut.getTransitions().get(auto_state).keySet()){
+                    if (tagging.equals(ts.getLabel(ts_transition.getTo()))) {
+                        for(Saut auto_state2 : aut.getTransitions().get(auto_state).get(tagging)){
+                            Pair<Sts,Saut> from = new Pair<>(ts_transition.getFrom(),auto_state);
+                            Pair<Sts,Saut> to = new Pair<>(ts_transition.getTo(),auto_state2);
+                            transitions.add(new Transition<>(from,ts_transition.getAction(),to));
+                        }
+                    }
+                }
+            }
+        }
+
+        for(Transition<Pair<Sts,Saut>,A> transition : transitions){
+            transitionSystem.addState(transition.getFrom());
+            transitionSystem.addState(transition.getTo());
+        }
+
+        for(A action : ts.getActions()){
+            transitionSystem.addAction(action);
+        }
+
+        for(Transition<Pair<Sts,Saut>,A> transition : transitions){
+            transitionSystem.addTransition(transition);
+        }
+
+        for(Sts initial_state : ts.getInitialStates()){
+            if(ts.getInitialStates().contains(initial_state)){
+                for(Saut initial : aut.getInitialStates()){
+                    for(Set<P> tagging : aut.getTransitions().get(initial).keySet()){
+                        if(tagging.equals(ts.getLabel(initial_state))){
+                            for(Saut aut_state : aut.getTransitions().get(initial).get(tagging)){
+                                transitionSystem.setInitial(new Pair<>(initial_state,aut_state),true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Set<Pair<Sts,Saut>> reachable_states = reach(transitionSystem);
+        Set<Pair<Sts,Saut>> toRemoveStates = new HashSet<>();
+
+        for(Pair<Sts,Saut> state : transitionSystem.getStates()){
+            if(!reachable_states.contains(state)){
+                for(Transition<Pair<Sts,Saut>,A> transition : transitions){
+                    if(transition.getFrom().equals(state) || transition.getTo().equals(state)){
+                        transitionSystem.removeTransition(transition);
+                    }
+                }
+                toRemoveStates.add(state);
+            }
+        }
+        for(Pair<Sts,Saut> state : toRemoveStates){
+            transitionSystem.removeState(state);
+        }
+
+        for(Pair<Sts,Saut> state : transitionSystem.getStates()){
+            transitionSystem.addAtomicProposition(state.getSecond());
+            transitionSystem.addToLabel(state,state.getSecond());
+        }
+
+
+        return transitionSystem;
     }
 
     @Override
