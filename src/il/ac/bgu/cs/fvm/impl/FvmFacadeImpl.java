@@ -855,12 +855,12 @@ public class FvmFacadeImpl implements FvmFacade {
             if (cycle != null) {
                 VerificationFailed verificationFailed = new VerificationFailed<>();
                 int index = cycle.indexOf(cycle.get(cycle.size()-1));
-                List<Pair<S, Saut>> myCycle = new ArrayList<>();
-                List<Pair<S, Saut>> myPrefix = new ArrayList<>();
+                List<S> myCycle = new ArrayList<>();
+                List<S> myPrefix = new ArrayList<>();
                 for(int i = index; i<cycle.size()-1; i++)
-                    myCycle.add(cycle.get(i));
+                    myCycle.add(cycle.get(i).first);
                 for(int i = 0; i<index; i++)
-                    myPrefix.add(cycle.get(i));
+                    myPrefix.add(cycle.get(i).first);
 
                 verificationFailed.setCycle(myCycle);
                 verificationFailed.setPrefix(myPrefix);
@@ -889,7 +889,7 @@ public class FvmFacadeImpl implements FvmFacade {
             if(soFar.contains(state)){
                 int index = soFar.indexOf(state);
                 for(int i = index; i< soFar.size(); i++){
-                    if(aut_accepting_states.contains(product_ts.getLabel(soFar.get(i)))){
+                    if(aut_accepting_states.contains((soFar.get(i).second))){
                         return nextList;
                     }
                 }
