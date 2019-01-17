@@ -146,8 +146,6 @@ public class TransitionSystemImpl<STATE, ACTION, ATOMIC_PROPOSITION> implements 
             throw new StateNotFoundException(s);
         if (!atomic_propositions.contains(l))
             throw new InvalidLablingPairException(s, l);
-        if (!labelsMap.get(s).contains(l))
-            throw new DeletionOfAttachedAtomicPropositionException(l, TransitionSystemPart.LABELING_FUNCTION);
         labelsMap.get(s).remove(l);
     }
 

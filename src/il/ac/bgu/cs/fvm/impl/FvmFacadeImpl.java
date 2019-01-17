@@ -17,7 +17,9 @@ import il.ac.bgu.cs.fvm.transitionsystem.AlternatingSequence;
 import il.ac.bgu.cs.fvm.transitionsystem.Transition;
 import il.ac.bgu.cs.fvm.transitionsystem.TransitionSystem;
 import il.ac.bgu.cs.fvm.util.Pair;
+import il.ac.bgu.cs.fvm.verification.VerificationFailed;
 import il.ac.bgu.cs.fvm.verification.VerificationResult;
+import il.ac.bgu.cs.fvm.verification.VerificationSucceeded;
 import org.antlr.v4.runtime.CommonToken;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.RuleContext;
@@ -750,42 +752,42 @@ public class FvmFacadeImpl implements FvmFacade {
         TransitionSystem<Pair<Sts, Saut>, A, Saut> transitionSystem = new TransitionSystemImpl<>();
         transitionSystem.setName(ts.getName() + "with_automaton");
 
-        Set<Transition<Pair<Sts,Saut>,A>> transitions = new HashSet<>();
+        Set<Transition<Pair<Sts, Saut>, A>> transitions = new HashSet<>();
 
         for (Transition<Sts, A> ts_transition : ts.getTransitions()) {
             for (Saut auto_state : aut.getTransitions().keySet()) {
-                for(Set<P> tagging : aut.getTransitions().get(auto_state).keySet()){
+                for (Set<P> tagging : aut.getTransitions().get(auto_state).keySet()) {
                     if (tagging.equals(ts.getLabel(ts_transition.getTo()))) {
-                        for(Saut auto_state2 : aut.getTransitions().get(auto_state).get(tagging)){
-                            Pair<Sts,Saut> from = new Pair<>(ts_transition.getFrom(),auto_state);
-                            Pair<Sts,Saut> to = new Pair<>(ts_transition.getTo(),auto_state2);
-                            transitions.add(new Transition<>(from,ts_transition.getAction(),to));
+                        for (Saut auto_state2 : aut.getTransitions().get(auto_state).get(tagging)) {
+                            Pair<Sts, Saut> from = new Pair<>(ts_transition.getFrom(), auto_state);
+                            Pair<Sts, Saut> to = new Pair<>(ts_transition.getTo(), auto_state2);
+                            transitions.add(new Transition<>(from, ts_transition.getAction(), to));
                         }
                     }
                 }
             }
         }
 
-        for(Transition<Pair<Sts,Saut>,A> transition : transitions){
+        for (Transition<Pair<Sts, Saut>, A> transition : transitions) {
             transitionSystem.addState(transition.getFrom());
             transitionSystem.addState(transition.getTo());
         }
 
-        for(A action : ts.getActions()){
+        for (A action : ts.getActions()) {
             transitionSystem.addAction(action);
         }
 
-        for(Transition<Pair<Sts,Saut>,A> transition : transitions){
+        for (Transition<Pair<Sts, Saut>, A> transition : transitions) {
             transitionSystem.addTransition(transition);
         }
 
-        for(Sts initial_state : ts.getInitialStates()){
-            if(ts.getInitialStates().contains(initial_state)){
-                for(Saut initial : aut.getInitialStates()){
-                    for(Set<P> tagging : aut.getTransitions().get(initial).keySet()){
-                        if(tagging.equals(ts.getLabel(initial_state))){
-                            for(Saut aut_state : aut.getTransitions().get(initial).get(tagging)){
-                                transitionSystem.setInitial(new Pair<>(initial_state,aut_state),true);
+        for (Sts initial_state : ts.getInitialStates()) {
+            if (ts.getInitialStates().contains(initial_state)) {
+                for (Saut initial : aut.getInitialStates()) {
+                    for (Set<P> tagging : aut.getTransitions().get(initial).keySet()) {
+                        if (tagging.equals(ts.getLabel(initial_state))) {
+                            for (Saut aut_state : aut.getTransitions().get(initial).get(tagging)) {
+                                transitionSystem.setInitial(new Pair<>(initial_state, aut_state), true);
                             }
                         }
                     }
@@ -793,26 +795,26 @@ public class FvmFacadeImpl implements FvmFacade {
             }
         }
 
-        Set<Pair<Sts,Saut>> reachable_states = reach(transitionSystem);
-        Set<Pair<Sts,Saut>> toRemoveStates = new HashSet<>();
+        Set<Pair<Sts, Saut>> reachable_states = reach(transitionSystem);
+        Set<Pair<Sts, Saut>> toRemoveStates = new HashSet<>();
 
-        for(Pair<Sts,Saut> state : transitionSystem.getStates()){
-            if(!reachable_states.contains(state)){
-                for(Transition<Pair<Sts,Saut>,A> transition : transitions){
-                    if(transition.getFrom().equals(state) || transition.getTo().equals(state)){
+        for (Pair<Sts, Saut> state : transitionSystem.getStates()) {
+            if (!reachable_states.contains(state)) {
+                for (Transition<Pair<Sts, Saut>, A> transition : transitions) {
+                    if (transition.getFrom().equals(state) || transition.getTo().equals(state)) {
                         transitionSystem.removeTransition(transition);
                     }
                 }
                 toRemoveStates.add(state);
             }
         }
-        for(Pair<Sts,Saut> state : toRemoveStates){
+        for (Pair<Sts, Saut> state : toRemoveStates) {
             transitionSystem.removeState(state);
         }
 
-        for(Pair<Sts,Saut> state : transitionSystem.getStates()){
+        for (Pair<Sts, Saut> state : transitionSystem.getStates()) {
             transitionSystem.addAtomicProposition(state.getSecond());
-            transitionSystem.addToLabel(state,state.getSecond());
+            transitionSystem.addToLabel(state, state.getSecond());
         }
 
 
@@ -843,7 +845,62 @@ public class FvmFacadeImpl implements FvmFacade {
     @Override
     public <S, A, P, Saut> VerificationResult<S> verifyAnOmegaRegularProperty
             (TransitionSystem<S, A, P> ts, Automaton<Saut, P> aut) {
-        throw new UnsupportedOperationException("Not supported yet."); // TODO: Implement verifyAnOmegaRegularProperty
+        TransitionSystem<Pair<S, Saut>, A, Saut> product_ts = product(ts, aut);
+
+        Set<Pair<S, Saut>> initials = product_ts.getInitialStates();
+        Set<Saut> aut_accepting_states = aut.getAcceptingStates();
+
+        for (Pair<S, Saut> initial : initials) {
+            List<Pair<S, Saut>> cycle = travelTS(Arrays.asList(initial), aut_accepting_states, product_ts);
+            if (cycle != null) {
+                VerificationFailed verificationFailed = new VerificationFailed<>();
+                int index = cycle.indexOf(cycle.get(cycle.size()-1));
+                List<Pair<S, Saut>> myCycle = new ArrayList<>();
+                List<Pair<S, Saut>> myPrefix = new ArrayList<>();
+                for(int i = index; i<cycle.size()-1; i++)
+                    myCycle.add(cycle.get(i));
+                for(int i = 0; i<index; i++)
+                    myPrefix.add(cycle.get(i));
+
+                verificationFailed.setCycle(myCycle);
+                verificationFailed.setPrefix(myPrefix);
+
+                return verificationFailed;
+            }
+        }
+
+        return new VerificationSucceeded<>();
+    }
+
+    private <Saut, S, A> List<Pair<S, Saut>> travelTS(List<Pair<S, Saut>> soFar, Set<Saut> aut_accepting_states, TransitionSystem<Pair<S, Saut>, A, Saut> product_ts) {
+
+        Set<Pair<S, Saut>> nextStates = new HashSet<>();
+
+        for(Transition<Pair<S,Saut>,A> transition : product_ts.getTransitions()){
+            if(transition.getFrom().equals(soFar.get(soFar.size()-1))) {
+                nextStates.add(transition.getTo());
+            }
+        }
+
+        for(Pair<S,Saut> state : nextStates){
+            List<Pair<S, Saut>> nextList = new ArrayList<>(soFar);
+            nextList.add(state);
+
+            if(soFar.contains(state)){
+                int index = soFar.indexOf(state);
+                for(int i = index; i< soFar.size(); i++){
+                    if(aut_accepting_states.contains(product_ts.getLabel(soFar.get(i)))){
+                        return nextList;
+                    }
+                }
+            }
+            else{
+                return travelTS(nextList,aut_accepting_states,product_ts);
+            }
+        }
+
+
+        return null;
     }
 
     @Override
